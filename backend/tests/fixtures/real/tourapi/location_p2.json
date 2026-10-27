@@ -1,0 +1,73 @@
+{
+ "response": {
+  "header": {
+   "resultCode": "0000",
+   "resultMsg": "OK"
+  },
+  "body": {
+   "items": {
+    "item": [
+     {
+      "addr1": "부산광역시 해운대구 마린시티1로 91 (우동, 마린시티두산위브포세이돈)",
+      "addr2": "",
+      "zipcode": "48119",
+      "areacode": "6",
+      "cat1": "A02",
+      "cat2": "A0203",
+      "cat3": "A02030600",
+      "contentid": "2946508",
+      "contenttypeid": "12",
+      "createdtime": "20230131110050",
+      "dist": "1478.8983188798554",
+      "firstimage": "http://tong.visitkorea.or.kr/cms/resource/43/2947043_image2_1.jpg",
+      "firstimage2": "http://tong.visitkorea.or.kr/cms/resource/43/2947043_image3_1.jpg",
+      "cpyrhtDivCd": "Type1",
+      "mapx": "129.1444371716",
+      "mapy": "35.1549495207",
+      "mlevel": "6",
+      "modifiedtime": "20251105153332",
+      "sigungucode": "16",
+      "tel": "",
+      "title": "부산 영화의 거리",
+      "lDongRegnCd": "26",
+      "lDongSignguCd": "350",
+      "lclsSystm1": "VE",
+      "lclsSystm2": "VE04",
+      "lclsSystm3": "VE040100"
+     },
+     {
+      "addr1": "부산광역시 해운대구 우동",
+      "addr2": "1411",
+      "zipcode": "48119",
+      "areacode": "6",
+      "cat1": "A02",
+      "cat2": "A0203",
+      "cat3": "A02030100",
+      "contentid": "2617724",
+      "contenttypeid": "12",
+      "createdtime": "20190906024515",
+      "dist": "1517.6426490934593",
+      "firstimage": "http://tong.visitkorea.or.kr/cms/resource/89/3575989_image2_1.jpg",
+      "firstimage2": "http://tong.visitkorea.or.kr/cms/resource/89/3575989_image3_1.jpg",
+      "cpyrhtDivCd": "Type1",
+      "mapx": "129.1436566548",
+      "mapy": "35.1560327184",
+      "mlevel": "6",
+      "modifiedtime": "20251128105741",
+      "sigungucode": "16",
+      "tel": "",
+      "title": "마린시티",
+      "lDongRegnCd": "26",
+      "lDongSignguCd": "350",
+      "lclsSystm1": "VE",
+      "lclsSystm2": "VE04",
+      "lclsSystm3": "VE040200"
+     }
+    ]
+   },
+   "numOfRows": 2,
+   "pageNo": 2,
+   "totalCount": 5
+  }
+ }
+}
