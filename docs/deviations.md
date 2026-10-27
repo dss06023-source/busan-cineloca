@@ -30,3 +30,7 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | API-013 응답 | {status, chips, choices, items, summary, relaxed, masked, prefill} | notices(사전에 없어 뺀 조건), criteria·labels(칩 삭제·선택 뒤 API-014로 다시 검색), works(result_type WORK), source_ids·sources를 더함 | WP-09 |
 | 기준 없는 '걸어서 N분' | 정의 없음 | 기준 위치 없이 도보 조건만 있거나 기준 역 이름이 '지하철역'처럼 일반 명사면 '아무 역에서 걸어서 N분'(T3)으로 봄. 기준만 있고 이동 조건이 없으면 반경 1km | WP-09 |
 | API-014 입력 | {conditions} | {criteria, labels}. criteria는 API-013 응답의 criteria와 같은 모양 | WP-09 |
+| 방문 순서 계산 | NearestNeighbor2Opt | 장소 9곳 이하는 동적 계획법(Held-Karp)으로 정확해, 10곳 이상은 최근접 이웃 + 2-opt + Or-opt. 무작위 시험에서 2-opt만으로는 8곳 이하 +10% 목표(AI-REQ-11)를 넘는 배치가 있었음 | WP-10 |
+| 추천 코스 상세 | course_stop의 leg_* 저장값 표시 | API-010이 저장된 순서로 구간을 매번 다시 계산(역간 시간이 바뀌어도 맞음). leg_* 열은 쓰지 않음 | WP-10 |
+| API-012 입력·응답 | {preference 또는 manual, start, budget_h} → {status, preference, route, reasons, intro, masked} | status에 FALLBACK·OUT_OF_SCOPE·INFEASIBLE, reason(budget·candidates), notices를 더함. start·budget_h는 선택이며 주면 문장보다 우선(FR-308), 없으면 문장의 출발지, 그것도 없으면 부산역 | WP-10 |
+| 구간 거리 | 정의 없음 | 직선거리 × 1.3(도시철도 구간 포함). total_m은 그 합 | WP-10 |

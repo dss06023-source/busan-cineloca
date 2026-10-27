@@ -191,6 +191,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Courses */
+        get: operations["list_courses_api_courses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{course_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Course */
+        get: operations["get_course_api_courses__course_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Plan Course */
+        post: operations["plan_course_api_courses_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ai Course */
+        post: operations["ai_course_api_courses_ai_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -212,6 +280,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AICourseIn */
+        AICourseIn: {
+            /** Preference */
+            preference?: string | null;
+            manual?: components["schemas"]["ManualIn"] | null;
+            start?: components["schemas"]["StartIn"] | null;
+            /** Budget H */
+            budget_h?: number | null;
+        };
+        /** AICourseOut */
+        AICourseOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "OK" | "FALLBACK" | "OUT_OF_SCOPE" | "INFEASIBLE";
+            preference: components["schemas"]["PreferenceOut"] | null;
+            route: components["schemas"]["RouteOut"] | null;
+            /** Reasons */
+            reasons: components["schemas"]["ReasonOut"][];
+            intro: components["schemas"]["CourseIntroOut"] | null;
+            /** Masked */
+            masked: boolean;
+            /** Notices */
+            notices: string[];
+            /** Reason */
+            reason: ("budget" | "candidates") | null;
+            options: components["schemas"]["OptionsOut"] | null;
+        };
         /** AskIn */
         AskIn: {
             /** Text */
@@ -252,6 +349,44 @@ export interface components {
             label: string;
             /** Value */
             value: string;
+        };
+        /** CourseDetailOut */
+        CourseDetailOut: {
+            course: components["schemas"]["CourseOut"];
+            route: components["schemas"]["RouteOut"];
+        };
+        /** CourseIntroOut */
+        CourseIntroOut: {
+            /** Title */
+            title: string;
+            /** Sentences */
+            sentences: string[];
+            /** Ai Generated */
+            ai_generated: boolean;
+            /** Dropped Count */
+            dropped_count: number;
+        };
+        /** CourseListOut */
+        CourseListOut: {
+            /** Items */
+            items: components["schemas"]["CourseOut"][];
+        };
+        /** CourseOut */
+        CourseOut: {
+            /** Id */
+            id: number;
+            /** Theme */
+            theme: string;
+            /** Title */
+            title: string;
+            /** Start Label */
+            start_label: string;
+            /** Stop Count */
+            stop_count: number;
+            /** Total Min */
+            total_min: number;
+            /** Total M */
+            total_m: number;
         };
         /**
          * CriteriaIO
@@ -381,6 +516,20 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["SourceCardOut"][];
         };
+        /** LegOut */
+        LegOut: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "walk" | "subway";
+            /** Minutes */
+            minutes: number;
+            /** Distance M */
+            distance_m: number;
+            /** Line */
+            line: string | null;
+        };
         /** LicenseOut */
         LicenseOut: {
             /** Source Id */
@@ -450,6 +599,20 @@ export interface components {
             /** Lon */
             lon: number | null;
         };
+        /**
+         * ManualIn
+         * @description AI 장애 때 직접 고르는 조건(FR-312). preference.v1과 같은 이름.
+         */
+        ManualIn: {
+            /** Genres */
+            genres?: string[];
+            /** Mood Tags */
+            mood_tags?: string[];
+            /** Districts */
+            districts?: string[];
+            /** Avoid */
+            avoid?: string[];
+        };
         /** MapItemOut */
         MapItemOut: {
             /** Id */
@@ -484,6 +647,15 @@ export interface components {
             /** Default Station Id */
             default_station_id: string;
         };
+        /** OptionsOut */
+        OptionsOut: {
+            /** Genres */
+            genres: string[];
+            /** Mood Tags */
+            mood_tags: string[];
+            /** Districts */
+            districts: string[];
+        };
         /** PersonOut */
         PersonOut: {
             /** Id */
@@ -500,12 +672,60 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** PlanIn */
+        PlanIn: {
+            start: components["schemas"]["StartIn"];
+            /** Location Ids */
+            location_ids: number[];
+            /**
+             * Fixed Order
+             * @default false
+             */
+            fixed_order: boolean;
+        };
         /** PointIO */
         PointIO: {
             /** Lat */
             lat: number;
             /** Lon */
             lon: number;
+        };
+        /** PreferenceOut */
+        PreferenceOut: {
+            /**
+             * Genres
+             * @default []
+             */
+            genres: string[];
+            /**
+             * Mood Tags
+             * @default []
+             */
+            mood_tags: string[];
+            /**
+             * Work Ids
+             * @default []
+             */
+            work_ids: number[];
+            /**
+             * Person Ids
+             * @default []
+             */
+            person_ids: number[];
+            /**
+             * Gus
+             * @default []
+             */
+            gus: string[];
+            /**
+             * Avoid
+             * @default []
+             */
+            avoid: string[];
+            /** Start */
+            start?: string | null;
+            /** Budget H */
+            budget_h?: number | null;
         };
         /** QueryOut */
         QueryOut: {
@@ -549,6 +769,13 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["SourceCardOut"][];
         };
+        /** ReasonOut */
+        ReasonOut: {
+            /** Location Id */
+            location_id: number;
+            /** Text */
+            text: string;
+        };
         /** ResultWorkOut */
         ResultWorkOut: {
             /** Id */
@@ -557,6 +784,22 @@ export interface components {
             title: string;
             /** Release Year */
             release_year: number | null;
+        };
+        /** RouteOut */
+        RouteOut: {
+            start: components["schemas"]["StartOut"];
+            /** Stops */
+            stops: components["schemas"]["StopOut"][];
+            /** Legs */
+            legs: components["schemas"]["LegOut"][];
+            /** Total Min */
+            total_min: number;
+            /** Total M */
+            total_m: number;
+            /** Source Ids */
+            source_ids: string[];
+            /** Sources */
+            sources: components["schemas"]["SourceCardOut"][];
         };
         /** SearchIn */
         SearchIn: {
@@ -618,6 +861,29 @@ export interface components {
             /** Kobis Notice */
             kobis_notice: string;
         };
+        /**
+         * StartIn
+         * @description 출발지: 도시철도역, 촬영지, 현재 위치 중 하나(FR-303). 좌표는 저장·기록하지 않는다.
+         */
+        StartIn: {
+            /** Station Id */
+            station_id?: string | null;
+            /** Location Id */
+            location_id?: number | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lon */
+            lon?: number | null;
+        };
+        /** StartOut */
+        StartOut: {
+            /** Label */
+            label: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+        };
         /** StationOut */
         StationOut: {
             /** Id */
@@ -632,6 +898,25 @@ export interface components {
             lon: number;
             /** Gu */
             gu: string;
+        };
+        /** StopOut */
+        StopOut: {
+            /** Ord */
+            ord: number;
+            /** Location Id */
+            location_id: number;
+            /** Name */
+            name: string;
+            /** Gu */
+            gu: string | null;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Dwell Min */
+            dwell_min: number;
+            /** Works */
+            works: components["schemas"]["WorkBriefOut"][];
         };
         /** SummaryOut */
         SummaryOut: {
@@ -1076,6 +1361,134 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_courses_api_courses_get: {
+        parameters: {
+            query?: {
+                theme?: ("work" | "actor" | "area") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_course_api_courses__course_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_course_api_courses_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_course_api_courses_ai_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AICourseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AICourseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

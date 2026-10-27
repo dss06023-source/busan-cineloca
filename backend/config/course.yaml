@@ -1,0 +1,8 @@
+# F3 코스 설정(build-plan 5장, FR-309·310, BR-13). 가중치를 바꾸면 후보 순위가 바뀐다.
+weights: {preference: 0.6, works: 0.2, distance: 0.2}
+top_k: 15            # 후보 수(FR-309)
+dwell_min: 20        # 장소별 체류(BR-13)
+max_stops: 8
+min_stops: 3
+distance_cap_m: 10000  # 출발지에서 이보다 멀면 거리 점수 0
+default_budget_h: 4

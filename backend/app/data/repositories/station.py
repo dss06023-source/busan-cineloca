@@ -40,3 +40,9 @@ class StationRepository:
             )
             row = await cur.fetchone()
         return row["minutes"] if row else None
+
+    async def time_table(self) -> dict[tuple[str, str], float]:
+        """역간 최소 소요시간 전부(역 수가 수백 개라 메모리에 둔다, BR-12)."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT from_id, to_id, minutes FROM station_time")
+            return {(r["from_id"], r["to_id"]): r["minutes"] for r in await cur.fetchall()}
