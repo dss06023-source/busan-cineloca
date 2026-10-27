@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     # KMDb 키 승인 전 대체: 오픈자료 '영화기본정보' CSV 경로(저장소에 넣지 않음)
     kmdb_csv_path: str = ""
     data_go_kr_key: str = ""
-    juso_key: str = ""
+    juso_key: str = ""  # 도로명주소 검색 API
+    juso_coord_key: str = ""  # 좌표제공 API(승인키가 따로)
     tour_api_key: str = ""
 
 

@@ -1,0 +1,10 @@
+{
+ "results": {
+  "common": {
+   "errorMessage": "도로명코드(rnMgtSn)의 요청항목이 없습니다.",
+   "errorCode": "E0003",
+   "totalCount": "0"
+  },
+  "juso": null
+ }
+}
