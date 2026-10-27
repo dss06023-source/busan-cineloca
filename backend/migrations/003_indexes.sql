@@ -1,0 +1,10 @@
+CREATE INDEX location_earth     ON location USING gist (ll_to_earth(lat, lon));
+CREATE INDEX location_tags      ON location USING gin (tags);
+CREATE INDEX location_name_trgm ON location USING gin (name_norm gin_trgm_ops);
+CREATE INDEX location_emb       ON location USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX work_title_trgm    ON work USING gin (title_norm gin_trgm_ops);
+CREATE INDEX work_genres        ON work USING gin (genres);
+CREATE INDEX dict_surface_trgm  ON dict_entry USING gin (surface gin_trgm_ops);
+CREATE INDEX dict_emb           ON dict_entry USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX shooting_location  ON shooting (location_id);
+CREATE INDEX ai_cache_expires   ON ai_cache (expires_at);

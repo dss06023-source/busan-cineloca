@@ -1,0 +1,20 @@
+# 비밀
+.env
+infra/.env
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+backend/logs/
+logs/
+
+# Node
+node_modules/
+frontend/dist/
+
+# 시드는 GitHub Release에 올린다
+infra/seed/*.sql.gz
