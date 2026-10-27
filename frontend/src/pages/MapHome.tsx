@@ -182,6 +182,8 @@ export function MapHome() {
         {selected && <SummaryCard item={selected} />}
       </div>
 
+      {/* 넓은 화면에서는 이 아래만 따로 스크롤한다(지도와 기준·반경은 그대로 보임) */}
+      <div className={listOnly ? "map-list only" : "map-list"}>
       {result.isError && <p className="error">{(result.error as Error).message}</p>}
       {result.isLoading && <p className="muted">촬영지를 찾는 중…</p>}
       {result.isSuccess && items.length === 0 && <p className="muted">이 범위에 촬영지가 없습니다. 반경을 넓혀 보세요.</p>}
@@ -201,6 +203,7 @@ export function MapHome() {
                   {it.works.map((w) => w.title).join(", ")}
                   {it.work_count > it.works.length && ` 외 ${it.work_count - it.works.length}편`}
                 </span>
+                {it.station && <StationBadge name={it.station.name} line={it.station.line} />}
               </span>
               <span className="tt-num num">{formatDistance(it.distance_m)}</span>
             </button>
@@ -208,6 +211,7 @@ export function MapHome() {
         ))}
       </ol>
       <SourceCards sources={result.data?.sources ?? []} />
+      </div>
     </div>
   );
 }
