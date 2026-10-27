@@ -14,7 +14,7 @@ import { StampBook } from "./pages/StampBook";
 import { CourseDetail, SavedCourseDetail } from "./pages/CourseDetail";
 import { Courses } from "./pages/Courses";
 import { LocationDetail } from "./pages/LocationDetail";
-import { MapHome } from "./pages/MapHome";
+import { Home } from "./pages/Home";
 import { Sources } from "./pages/Sources";
 import { WorkDetail } from "./pages/WorkDetail";
 import { Works } from "./pages/Works";
@@ -51,7 +51,7 @@ export const routes: RouteObject[] = [
         // 하단 탭은 남기고 화면 자리에만 오류 안내를 띄운다
         errorElement: <RouteError />,
         children: [
-          { path: "/", element: <MapHome /> },
+          { path: "/", element: <Home /> },
           { path: "/locations/:id", element: <LocationDetail /> },
           { path: "/works", element: <Works /> },
           { path: "/works/:id", element: <WorkDetail /> },

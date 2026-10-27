@@ -57,11 +57,15 @@ export function Layout() {
 
   return (
     <div className="app">
-      <main className="content">
+      <main className={pathname === "/" ? "content is-home" : "content"}>
         {detail && <BackBar parent={detail.parent} />}
         <Outlet />
       </main>
       <nav className="tabs" aria-label="주 메뉴">
+        {/* 넓은 화면에서만 보이는 이름(위쪽 막대). 휴대폰은 하단 탭만 */}
+        <span className="brand" aria-hidden="true">
+          부산 씨네로케
+        </span>
         {TABS.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
             {t.label}

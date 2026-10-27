@@ -64,15 +64,25 @@ export function Works() {
       {list.isLoading && <p className="muted">불러오는 중…</p>}
       {list.data && (
         <>
-          <p className="muted">{total}편</p>
+          <p className="tt-head" aria-hidden="true">
+            <span>{total}편</span>
+            <span className="tt-num">개봉</span>
+            <span className="tt-num">촬영지</span>
+          </p>
           {total === 0 && <p>조건에 맞는 작품이 없습니다.</p>}
           <ul className="list" aria-label="작품 목록">
             {list.data.items.map((w) => (
               <li key={w.id}>
-                <Link className="list-item" to={`/works/${w.id}`}>
-                  <strong>{w.title}</strong>
-                  <span className="muted">
-                    {[w.release_year, w.genres.join("·"), `부산 촬영지 ${w.location_count}곳`].filter(Boolean).join(" · ")}
+                <Link className="list-item tt-row" to={`/works/${w.id}`}>
+                  <span className="tt-main">
+                    <strong>{w.title}</strong>
+                    <span className="muted">{w.genres.join(", ")}</span>
+                  </span>
+                  <span className="tt-num num" aria-label={w.release_year ? `${w.release_year}년` : "개봉연도 없음"}>
+                    {w.release_year ?? "–"}
+                  </span>
+                  <span className="tt-num" aria-label={`부산 촬영지 ${w.location_count}곳`}>
+                    <span className="num">{w.location_count}</span>곳
                   </span>
                 </Link>
               </li>
