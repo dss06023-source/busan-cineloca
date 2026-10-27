@@ -33,7 +33,12 @@ def run(conn, templates, name, **params):
 def test_migrate_is_idempotent(conn, db_url):
     assert migrate(db_url) == []
     versions = [r["version"] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-    assert versions == ["001", "002", "003", "004", "005"]
+    assert versions == ["001", "002", "003", "004", "005", "006", "007"]
+
+
+def test_kmdb_policy_is_store(conn):
+    # TBD-01 결정(006): KMDb 줄거리·키워드·링크는 저장한다
+    assert conn.execute("SELECT policy FROM source WHERE id = 'DATA-04'").fetchone()["policy"] == "STORE"
 
 
 def test_korean_trigram_not_empty(conn):

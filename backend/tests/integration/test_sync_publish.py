@@ -1,5 +1,6 @@
 """동기화 반영(build-plan 7장): 두 번 돌려도 id와 관리자 편집 값이 그대로여야 한다."""
 
+from dataclasses import replace
 from datetime import date
 
 import psycopg
@@ -12,11 +13,24 @@ from app.data.migrate import migrate
 from app.data.models import StagedLocation, StagedShooting, StagedWork
 from app.data.repositories.staging import StagingRepository
 from app.data.repositories.sync import SyncRepository
+from app.data.repositories.work import WorkRepository
 
 pytestmark = pytest.mark.integration
 
 WORKS = [
-    StagedWork("t:해운대:2009", "해운대", "해운대", 2009, "DATA-01", ["드라마"], "K1", None, "auto", 0.95),
+    StagedWork(
+        "t:해운대:2009",
+        "해운대",
+        "해운대",
+        2009,
+        "DATA-01",
+        ["드라마"],
+        "K1",
+        None,
+        "auto",
+        0.95,
+        kmdb={"source_id": "DATA-04", "plot": "가짜 줄거리", "keywords": ["쓰나미"], "link": "https://x"},
+    ),
     StagedWork("t:친구:2001", "친구", "친구", 2001, "DATA-01", match_status="unmatched"),
 ]
 LOCS = [
@@ -92,6 +106,8 @@ async def test_two_syncs_keep_ids_and_admin_edits(env):
         assert conn.execute("SELECT kmdb_id, match_status FROM work WHERE ext_key = 't:친구:2001'").fetchone() == (
             "K7", "reviewed",
         )  # fmt: skip
+        plot = conn.execute("SELECT kmdb->>'plot' FROM work WHERE ext_key = 't:해운대:2009'").fetchone()[0]
+        assert plot == "가짜 줄거리"
 
 
 async def test_missing_rows_retire_and_return(env):
@@ -121,3 +137,50 @@ async def test_guard_violation_keeps_service_data(env):
         q = "SELECT status, prev_counts, finished_at IS NOT NULL FROM sync_run ORDER BY id DESC"
         row = conn.execute(q).fetchone()
         assert row == ("rejected", {"work": 2, "location": 3, "shooting": 2}, True)
+
+
+async def test_match_candidate_goes_to_review_queue_once(env):
+    pool, url = env
+    works = [WORKS[0], replace(WORKS[1], match_score=0.7, match_candidate="K4")]
+    await sync(pool, (works, LOCS, SHOOT))
+    await sync(pool, (works, LOCS, SHOOT))  # 두 번 돌려도 한 건
+    with psycopg.connect(url, autocommit=True) as conn:
+        rows = conn.execute(
+            "SELECT r.proposal->>'kmdb_id', r.proposer, r.score FROM review_item r JOIN work w ON w.id = r.target_id"
+            " WHERE r.kind = 'match' AND w.ext_key = 't:친구:2001'"
+        ).fetchall()
+        assert rows == [("K4", "rule", pytest.approx(0.7))]
+        # 반려한 후보도 다시 올리지 않는다
+        conn.execute("UPDATE review_item SET status = 'rejected'")
+    await sync(pool, (works, LOCS, SHOOT))
+    with psycopg.connect(url, autocommit=True) as conn:
+        assert conn.execute("SELECT count(*) FROM review_item").fetchone()[0] == 1
+
+
+async def test_reviewed_work_gets_stored_kmdb_for_its_own_id(env):
+    pool, url = env
+    await sync(pool, (WORKS, LOCS, SHOOT))
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute("UPDATE work SET kmdb_id = 'K7', match_status = 'reviewed' WHERE ext_key = 't:친구:2001'")
+    stored = {"source_id": "DATA-04", "plot": "검수한 줄거리", "keywords": [], "link": "https://k7"}
+    # 매칭 단계가 검수 연결(K7)로 채운 저장본은 반영되고, 다른 ID의 저장본은 무시된다
+    await sync(pool, ([WORKS[0], replace(WORKS[1], kmdb_id="K7", kmdb=stored)], LOCS, SHOOT))
+    await sync(pool, ([WORKS[0], replace(WORKS[1], kmdb_id="K8", kmdb={"plot": "다른 영화"})], LOCS, SHOOT))
+    with psycopg.connect(url, autocommit=True) as conn:
+        row = conn.execute("SELECT kmdb_id, kmdb->>'plot' FROM work WHERE ext_key = 't:친구:2001'").fetchone()
+        assert row == ("K7", "검수한 줄거리")
+
+
+async def test_set_match_clears_stored_kmdb_only_when_id_changes(env):
+    pool, url = env
+    await sync(pool, (WORKS, LOCS, SHOOT))
+    with psycopg.connect(url, autocommit=True) as conn:
+        wid = conn.execute("SELECT id FROM work WHERE ext_key = 't:해운대:2009'").fetchone()[0]
+    repo = WorkRepository(pool)
+    assert await repo.set_match(wid, "K1")  # 같은 ID 승인: 저장본 유지
+    assert await repo.reviewed_matches() == {"t:해운대:2009": "K1"}
+    with psycopg.connect(url, autocommit=True) as conn:
+        assert conn.execute("SELECT kmdb->>'plot' FROM work WHERE id = %s", (wid,)).fetchone()[0] == "가짜 줄거리"
+    assert await repo.set_match(wid, "K9")  # 다른 ID: 다음 동기화가 채울 때까지 비움
+    with psycopg.connect(url, autocommit=True) as conn:
+        assert conn.execute("SELECT kmdb FROM work WHERE id = %s", (wid,)).fetchone()[0] is None
