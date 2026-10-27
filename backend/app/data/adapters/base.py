@@ -99,7 +99,13 @@ class BaseApiClient[T](ABC):
             if r.status_code == 429 or r.status_code >= 500:
                 last = AdapterError(f"{self.name}: http {r.status_code}")
                 continue
-            if r.status_code >= 400:
+            if r.status_code >= 400:  # 키·요청 오류는 다시 보내도 같다. 기관 오류 본문이 있으면 그 코드를 남긴다
+                try:
+                    body = r.json()
+                except ValueError:
+                    body = None
+                if body is not None:
+                    self.check(body)
                 raise AdapterError(f"{self.name}: http {r.status_code}")
             try:
                 payload = r.json()

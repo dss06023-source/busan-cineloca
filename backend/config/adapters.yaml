@@ -10,3 +10,9 @@ adapters:
     timeout_s: 5.0
     page_size: 10
     daily_limit: 3000   # KOBIS 오픈 API 키당 하루 3,000건(확인 필요)
+  tourapi:
+    source_id: DATA-10
+    base_url: https://apis.data.go.kr/B551011/KorService2
+    timeout_s: 10.0
+    page_size: 100
+    daily_limit: 1000   # 개발계정 서비스별 하루 1,000건(확인 필요)
