@@ -1,4 +1,4 @@
-// API-001~019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
+// API-001~023 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
 import { http, HttpResponse } from "msw";
 import type { QueryOut } from "../api/client";
 import * as data from "./data";
@@ -80,6 +80,32 @@ export const handlers = [
     const missing = data.route.stops.map((s) => s.location_id).filter((id) => !b.stamps.includes(`m.${id}.s`));
     const key = `course:${b.course.id ?? "x"}`;
     return HttpResponse.json(missing.length ? { ok: false, token: null, course_key: key, missing } : { ok: true, token: `m.${key}.b`, course_key: key, missing: [] });
+  }),
+  // 관리자 목: 비밀번호 'demo'만 통과, '잠금'은 423
+  http.post("/api/admin/session", async ({ request }) => {
+    const { password } = (await request.json()) as { password: string };
+    if (password === "demo") return new HttpResponse(null, { status: 204 });
+    const locked = password === "잠금";
+    return HttpResponse.json(
+      { error: { code: "ERR-012", message: "관리자 인증에 실패했습니다", retry_after: locked ? 540 : null } },
+      { status: locked ? 423 : 401 },
+    );
+  }),
+  http.delete("/api/admin/session", () => new HttpResponse(null, { status: 204 })),
+  http.get("/api/admin/sync", () => HttpResponse.json(data.syncReport)),
+  http.post("/api/admin/sync", () => HttpResponse.json({ run_id: 3 }, { status: 202 })),
+  http.get("/api/admin/reviews", () => HttpResponse.json({ items: data.reviews })),
+  http.patch("/api/admin/reviews", async ({ request }) => {
+    const b = (await request.json()) as { id: number; action: string };
+    const item = data.reviews.find((r) => r.id === b.id)!;
+    return HttpResponse.json({ ...item, status: b.action === "approve" ? "approved" : "rejected" });
+  }),
+  http.patch("/api/admin/locations/:id", async ({ request, params }) => {
+    const b = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: Number(params.id), name: "부산역 광장", caution: b.caution ?? "none", safety_note: b.safety_note ?? null,
+      cert_radius_m: b.cert_radius_m ?? 100, cert_excluded: b.cert_excluded ?? false, tags: ["역"],
+    });
   }),
   http.delete("/api/query/session", () => new HttpResponse(null, { status: 204 })),
 ];
