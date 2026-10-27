@@ -275,4 +275,8 @@ INSERT INTO dict_entry(kind, surface, canonical_id) VALUES
 SELECT setval(pg_get_serial_sequence('location', 'id'), (SELECT max(id) FROM location));
 SELECT setval(pg_get_serial_sequence('work', 'id'), (SELECT max(id) FROM work));
 SELECT setval(pg_get_serial_sequence('person', 'id'), (SELECT max(id) FROM person));
+-- 작품 상세 개발용 가짜 KMDb 항목(WP-08). 지어낸 줄거리·키워드이며 source_id는 DEV-SEED. 이미지 주소는 넣지 않는다
+UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "해운대에 거대한 파도가 밀려온다는 경고가 나오고, 구조대원 한지우는 피서객을 대피시키려 애쓴다.", "keywords": ["해운대", "재난", "구조대"]}' WHERE id = 1;
+UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "형사 강도윤은 부산역에서 사라진 증인을 쫓아 도시 곳곳을 달린다.", "keywords": ["추격", "형사", "부산역"]}' WHERE id = 3;
+UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "밀수 조직을 잡으려는 작전이 북항에서 시작되고, 강도윤은 잠입 수사를 맡는다.", "keywords": ["북항", "잠입", "밀수"]}' WHERE id = 9;
 COMMIT;

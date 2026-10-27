@@ -5,6 +5,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from app.api.assembler import Assembler
 from app.api.errors import AppError
+from app.services.archive.service import ArchiveService
 from app.services.map.service import MapService
 
 
@@ -14,6 +15,10 @@ def get_pool(request: Request) -> AsyncConnectionPool:
 
 def get_map_service(request: Request) -> MapService:
     return request.app.state.map_service
+
+
+def get_archive_service(request: Request) -> ArchiveService:
+    return request.app.state.archive_service
 
 
 def get_assembler(request: Request) -> Assembler:

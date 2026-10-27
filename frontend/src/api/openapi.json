@@ -140,6 +140,235 @@
         }
       }
     },
+    "/api/works": {
+      "get": {
+        "tags": [
+          "작품"
+        ],
+        "summary": "List Works",
+        "operationId": "list_works_api_works_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 50
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Genre"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "locations",
+                "year"
+              ],
+              "type": "string",
+              "default": "locations",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/works/{work_id}": {
+      "get": {
+        "tags": [
+          "작품"
+        ],
+        "summary": "Get Work",
+        "operationId": "get_work_api_works__work_id__get",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Work Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/works/{work_id}/rating": {
+      "get": {
+        "tags": [
+          "작품"
+        ],
+        "summary": "Get Rating",
+        "operationId": "get_rating_api_works__work_id__rating_get",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Work Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/works/{work_id}/intro": {
+      "post": {
+        "tags": [
+          "작품"
+        ],
+        "summary": "Get Intro",
+        "operationId": "get_intro_api_works__work_id__intro_post",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Work Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntroIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntroOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources": {
       "get": {
         "tags": [
@@ -331,6 +560,171 @@
           "gemini_usage"
         ],
         "title": "HealthOut"
+      },
+      "ImagesOut": {
+        "properties": {
+          "posters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Posters"
+          },
+          "stills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "posters",
+          "stills"
+        ],
+        "title": "ImagesOut",
+        "description": "이미지는 원본 주소만 넘기고 파일은 저장하지 않는다(NO_STORE)."
+      },
+      "IntroFallbackLocation": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "gu"
+        ],
+        "title": "IntroFallbackLocation"
+      },
+      "IntroFallbackOut": {
+        "properties": {
+          "plot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plot"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/IntroFallbackLocation"
+            },
+            "type": "array",
+            "title": "Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plot",
+          "locations"
+        ],
+        "title": "IntroFallbackOut"
+      },
+      "IntroIn": {
+        "properties": {
+          "spoiler": {
+            "type": "string",
+            "enum": [
+              "none",
+              "partial"
+            ],
+            "title": "Spoiler",
+            "default": "none"
+          }
+        },
+        "type": "object",
+        "title": "IntroIn"
+      },
+      "IntroOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status"
+          },
+          "sentences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sentences"
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated"
+          },
+          "degraded": {
+            "type": "boolean",
+            "title": "Degraded"
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntroFallbackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dropped_count": {
+            "type": "integer",
+            "title": "Dropped Count"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "sentences",
+          "ai_generated",
+          "degraded",
+          "fallback",
+          "dropped_count",
+          "source_ids",
+          "sources"
+        ],
+        "title": "IntroOut"
       },
       "LicenseOut": {
         "properties": {
@@ -661,6 +1055,29 @@
         ],
         "title": "MetaOut"
       },
+      "PersonOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "title": "PersonOut"
+      },
       "PhotoOut": {
         "properties": {
           "url": {
@@ -678,6 +1095,42 @@
           "title"
         ],
         "title": "PhotoOut"
+      },
+      "RatingOut": {
+        "properties": {
+          "rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rating",
+          "source_ids",
+          "sources"
+        ],
+        "title": "RatingOut"
       },
       "SearchIn": {
         "properties": {
@@ -936,6 +1389,30 @@
         ],
         "title": "ValidationError"
       },
+      "VodOut": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "VodOut"
+      },
       "WorkBriefOut": {
         "properties": {
           "id": {
@@ -965,6 +1442,225 @@
           "release_year"
         ],
         "title": "WorkBriefOut"
+      },
+      "WorkDetailOut": {
+        "properties": {
+          "work": {
+            "$ref": "#/components/schemas/WorkOut"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonOut"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plot"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "images": {
+            "$ref": "#/components/schemas/ImagesOut"
+          },
+          "vod": {
+            "items": {
+              "$ref": "#/components/schemas/VodOut"
+            },
+            "type": "array",
+            "title": "Vod"
+          },
+          "kmdb_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kmdb Link"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkLocationOut"
+            },
+            "type": "array",
+            "title": "Locations"
+          },
+          "related": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBriefOut"
+            },
+            "type": "array",
+            "title": "Related"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "work",
+          "people",
+          "plot",
+          "keywords",
+          "images",
+          "vod",
+          "kmdb_link",
+          "locations",
+          "related",
+          "source_ids",
+          "sources"
+        ],
+        "title": "WorkDetailOut"
+      },
+      "WorkListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page"
+        ],
+        "title": "WorkListOut"
+      },
+      "WorkLocationOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "gu",
+          "lat",
+          "lon"
+        ],
+        "title": "WorkLocationOut"
+      },
+      "WorkOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "release_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Year"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres"
+          },
+          "location_count": {
+            "type": "integer",
+            "title": "Location Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "release_year",
+          "genres",
+          "location_count"
+        ],
+        "title": "WorkOut"
       }
     }
   }
