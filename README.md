@@ -52,3 +52,15 @@ cd frontend && npm ci && npm run dev    # http://localhost:5173, /api는 8000으
 API를 바꾸면 `python -m app.tools.export_openapi ../frontend/src/api/openapi.json` 뒤 `npm run gen:api`로 타입을 다시 만듭니다.
 
 CI는 ruff, import-linter 계층 규칙, SQL 위치 규칙, pytest(실제 PostgreSQL), 프론트엔드 lint·tsc·vitest·build, gitleaks, compose 빌드를 PR마다 돌립니다.
+
+### E2E(시연 장면 5개)
+
+미니 시드와 가짜 AI(`AI_PROVIDERS=fake`)로 백엔드·vite를 띄워 360px·1440px에서 시연 장면 5개를 돌립니다. PR CI에는 넣지 않고, 통합 전이나 시연 리허설 때 돌립니다.
+
+```bash
+cd frontend
+npx playwright install chromium          # 처음 한 번
+E2E_ADMIN_URL=postgresql://app:app@localhost:5432/postgres e2e/run.sh   # cl_e2e DB를 새로 만들어 씀
+```
+
+가짜 AI 응답은 `backend/app/data/ai_gateway/factory.py`의 `FAKE_RESPONSES`에 있고, 미니 시드의 장면 2~4에 맞춰 두었습니다.

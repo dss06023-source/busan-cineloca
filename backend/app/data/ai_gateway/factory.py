@@ -66,13 +66,36 @@ def build_embedder(settings, client: httpx.AsyncClient):
     return OllamaEmbedder(settings.ollama_url, client, model=e["model"], timeout_s=e["timeout_s"])
 
 
-# AI_PROVIDERS=fake일 때 작업별 고정 응답(E2E·장애 주입). 기능 WP가 시연 장면에 맞게 늘린다
+# AI_PROVIDERS=fake일 때 작업별 고정 응답(E2E·장애 주입). 미니 시드(가짜 데이터)의 시연 장면 2~4에 맞춘 값이다.
+# 입력과 상관없이 같은 값을 돌려주므로, 다른 작품·질의에서는 근거 대조가 걸러 강등되는 것이 정상이다
 FAKE_RESPONSES: dict[str, dict] = {
-    "extract_query": {"result_type": "LOCATION", "out_of_scope": False},
-    "summarize_results": {"sentences": []},
-    "structure_preference": {"budget_h": 4, "out_of_scope": False},
-    "course_intro": {"title": "추천 코스", "sentences": [], "reasons": []},
-    "work_intro": {"sentences": []},
+    # 장면 3: "강도윤 나온 영화 촬영지 중 지하철역에서 걸어서 10분 안"
+    "extract_query": {
+        "persons": ["강도윤"],
+        "base": {"kind": "station"},
+        "travel": {"mode": "walk", "minutes": 10},
+        "result_type": "LOCATION",
+        "out_of_scope": False,
+    },
+    "summarize_results": {
+        "sentences": [
+            {"text": "강도윤 출연작의 촬영지를 역에서 걷기 좋은 곳 위주로 모았습니다.", "entities": ["강도윤"]}
+        ]
+    },
+    # 장면 4: 서면 출발 반나절
+    "structure_preference": {"start": "서면", "budget_h": 4, "mood_tags": ["야경"], "out_of_scope": False},
+    "course_intro": {
+        "title": "서면에서 출발하는 촬영지 반나절",
+        "sentences": [{"text": "서면에서 출발해 촬영지를 차례로 둘러보는 반나절 코스입니다.", "entities": ["서면"]}],
+        "reasons": [],
+    },
+    # 장면 2: 「부산 추격전」(작품 3)
+    "work_intro": {
+        "sentences": [
+            {"text": "「부산 추격전」은 2017년에 나온 범죄 액션 영화입니다.", "entities": ["부산 추격전", "2017"]},
+            {"text": "형사 강도윤이 부산역에서 사라진 증인을 쫓습니다.", "entities": ["강도윤", "부산역"]},
+        ]
+    },
     "suggest_tags": {"tags": [], "confidence": 0.0},
     "judge_match": {"kmdb_id": None, "confidence": 0.0},
 }

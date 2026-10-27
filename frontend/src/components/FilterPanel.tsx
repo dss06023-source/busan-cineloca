@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { endpoints, type Criteria } from "../api/client";
+import { stationLabel } from "../lib/station";
 
 const WALK_MINUTES = [5, 10, 15, 20, 30];
 
@@ -100,7 +101,7 @@ export function FilterPanel({ initial, labels, onSearch, busy = false }: Props) 
           <option value="*">아무 지하철역</option>
           {meta.data?.stations.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name}역({s.line})
+              {stationLabel(s.name, s.line)}
             </option>
           ))}
         </select>
