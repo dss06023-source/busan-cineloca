@@ -28,6 +28,11 @@ export type PlanIn = Schemas["PlanIn"];
 export type StartIn = Schemas["StartIn"];
 export type AICourseIn = Schemas["AICourseIn"];
 export type AICourseOut = Schemas["AICourseOut"];
+export type CertifyIn = Schemas["CertifyIn"];
+export type CertifyOut = Schemas["CertifyOut"];
+export type VerifyOut = Schemas["VerifyOut"];
+export type BadgeIn = Schemas["BadgeIn"];
+export type BadgeOut = Schemas["BadgeOut"];
 export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
@@ -94,6 +99,10 @@ export const endpoints = {
   course: (id: number) => api<CourseDetail>(`/api/courses/${id}`),
   planCourse: (body: PlanIn) => api<RouteOut>("/api/courses/plan", { method: "POST", body }),
   aiCourse: (body: AICourseIn) => api<AICourseOut>("/api/courses/ai", { method: "POST", body, ai: true }),
+  certify: (body: CertifyIn) => api<CertifyOut>("/api/stamps", { method: "POST", body }),
+  verifyStamps: (tokens: string[], badges: string[]) =>
+    api<VerifyOut>("/api/stamps/verify", { method: "POST", body: { tokens, badges } }),
+  badge: (body: BadgeIn) => api<BadgeOut>("/api/badges", { method: "POST", body }),
   intro: (id: number, spoiler: Spoiler) =>
     api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };
