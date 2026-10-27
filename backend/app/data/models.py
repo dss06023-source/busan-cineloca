@@ -48,6 +48,7 @@ class LocationHit:
     source_ids: list[str]
     dist_m: float | None = None
     travel_min: float | None = None
+    nearest_station_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -228,3 +229,17 @@ class SyncRun:
     counts: dict | None = None
     prev_counts: dict | None = None
     failures: list | dict | None = None
+
+
+@dataclass(frozen=True)
+class WorkBrief:
+    id: int
+    title: str
+    release_year: int | None
+
+
+@dataclass(frozen=True)
+class Photo:
+    url: str
+    title: str
+    source_id: str

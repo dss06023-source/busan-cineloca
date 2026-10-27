@@ -3,11 +3,21 @@
 from fastapi import Request
 from psycopg_pool import AsyncConnectionPool
 
+from app.api.assembler import Assembler
 from app.api.errors import AppError
+from app.services.map.service import MapService
 
 
 def get_pool(request: Request) -> AsyncConnectionPool:
     return request.app.state.pool
+
+
+def get_map_service(request: Request) -> MapService:
+    return request.app.state.map_service
+
+
+def get_assembler(request: Request) -> Assembler:
+    return request.app.state.assembler
 
 
 def session_id(request: Request) -> str | None:
