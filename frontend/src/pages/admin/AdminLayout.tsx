@@ -7,6 +7,11 @@ export function isUnauthorized(e: unknown): boolean {
   return e instanceof ApiError && e.status === 401;
 }
 
+/** 관리자 화면 오류 문구: 서버가 보낸 이유(예: 장소가 부족함)가 있으면 그것을 보여 준다. */
+export function adminError(e: unknown): string {
+  return e instanceof ApiError && e.serverMessage ? e.serverMessage : (e as Error).message;
+}
+
 export function AdminLayout() {
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -17,6 +22,7 @@ export function AdminLayout() {
         <nav aria-label="관리 메뉴">
           <NavLink to="/admin/sync">동기화</NavLink>
           <NavLink to="/admin/reviews">검수</NavLink>
+          <NavLink to="/admin/courses">추천 코스</NavLink>
         </nav>
         <button
           type="button"
