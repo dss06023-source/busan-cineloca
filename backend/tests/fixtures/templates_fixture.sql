@@ -2,7 +2,8 @@
 INSERT INTO source(id, org, name, url, license, policy) VALUES
  ('DATA-01','부산광역시','영화 속 부산정보','https://www.data.go.kr/data/15164328/openapi.do','이용허락범위 제한 없음','STORE'),
  ('DATA-02','부산광역시','씨네맵 정보','https://www.data.go.kr/data/15164338/openapi.do','이용허락범위 제한 없음','STORE'),
- ('DATA-04','한국영상자료원','KMDb','https://www.kmdb.or.kr','약관 확인','ID_ONLY');
+ ('DATA-04','한국영상자료원','KMDb','https://www.kmdb.or.kr','약관 확인','ID_ONLY')
+ON CONFLICT (id) DO NOTHING;  -- 004_sources가 이미 넣은 행은 그대로 둔다
 INSERT INTO station(id,name,line,lat,lon,gu) VALUES
  ('119','서면','1호선',35.1579,129.0594,'부산진구'),
  ('113','부산역','1호선',35.1152,129.0422,'동구'),

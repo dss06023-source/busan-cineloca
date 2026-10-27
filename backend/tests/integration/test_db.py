@@ -3,9 +3,7 @@
 from pathlib import Path
 
 import httpx
-import psycopg
 import pytest
-from psycopg.rows import dict_row
 
 from app.config import Settings
 from app.data.migrate import migrate
@@ -14,21 +12,12 @@ from app.main import create_app
 pytestmark = pytest.mark.integration
 
 SQL_DIR = Path(__file__).resolve().parents[2] / "app/data/repositories/sql"
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/templates_fixture.sql"
 BASE = dict(work_ids=None, person_ids=None, genres=None, gus=None, year_from=None, year_to=None, limit=20)
 SEOMYEON = dict(lat=35.1579, lon=129.0594)
 
 
 def walk_radius(minutes: int) -> float:
     return minutes * 4000 / 60 / 1.3  # build-plan 5장 도보 규칙
-
-
-@pytest.fixture(scope="module")
-def conn(db_url):
-    assert migrate(db_url) == ["001_extensions.sql", "002_core.sql", "003_indexes.sql"]
-    with psycopg.connect(db_url, row_factory=dict_row, autocommit=True) as c:
-        c.execute(FIXTURE.read_text(encoding="utf-8"))
-        yield c
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +33,7 @@ def run(conn, templates, name, **params):
 def test_migrate_is_idempotent(conn, db_url):
     assert migrate(db_url) == []
     versions = [r["version"] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-    assert versions == ["001", "002", "003"]
+    assert versions == ["001", "002", "003", "004"]
 
 
 def test_korean_trigram_not_empty(conn):
