@@ -1,7 +1,7 @@
 -- T3_NEAR_STATION: base_station이 없으면 '아무 역에서 걸어서 N분',
 --                  있으면 '그 역에서 도시철도 + 내려서 걷기 N분'
 WITH {matched}
-SELECT l.id, l.name, l.gu, l.lat, l.lon,
+SELECT l.id, l.name, l.gu, l.lat, l.lon, l.nearest_station_id,
        array_agg(DISTINCT m.work_id)   AS work_ids,
        array_agg(DISTINCT m.source_id) AS source_ids,
        NULL::real AS dist_m,

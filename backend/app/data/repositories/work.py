@@ -2,7 +2,7 @@
 
 from psycopg_pool import AsyncConnectionPool
 
-from app.data.models import Page, Person, Work, WorkDetail, WorkLocation, WorkQuery
+from app.data.models import Page, Person, Work, WorkBrief, WorkDetail, WorkLocation, WorkQuery
 from app.data.repositories._rows import build
 from app.data.text import normalize
 
@@ -72,3 +72,32 @@ class WorkRepository:
         work = build(Work, row)
         source_ids = list(dict.fromkeys([work.source_id, *(loc.source_id for loc in locations)]))
         return WorkDetail(work=work, people=people, locations=locations, source_ids=source_ids)
+
+    async def by_locations(self, location_ids: list[int]) -> dict[int, list[WorkBrief]]:
+        """촬영지마다 촬영된 작품(최신작 먼저). 요약 카드는 앞의 3편만 쓴다(FR-206)."""
+        result: dict[int, list[WorkBrief]] = {i: [] for i in location_ids}
+        if not location_ids:
+            return result
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT DISTINCT s.location_id, w.id, w.title, w.release_year FROM shooting s"
+                " JOIN work w ON w.id = s.work_id WHERE s.location_id = ANY(%(ids)s) AND NOT w.retired"
+                " ORDER BY s.location_id, w.release_year DESC NULLS LAST, w.id",
+                {"ids": location_ids},
+            )
+            for r in await cur.fetchall():
+                result[r["location_id"]].append(build(WorkBrief, r))
+        return result
+
+    async def genres(self) -> list[str]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT DISTINCT unnest(genres) AS g FROM work WHERE NOT retired ORDER BY g")
+            return [r["g"] for r in await cur.fetchall()]
+
+    async def year_range(self) -> tuple[int, int] | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT min(release_year) AS lo, max(release_year) AS hi FROM work WHERE NOT retired"
+            )
+            row = await cur.fetchone()
+        return (row["lo"], row["hi"]) if row["lo"] is not None else None
