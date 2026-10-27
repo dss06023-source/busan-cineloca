@@ -124,7 +124,7 @@ function IntroSection({ workId }: { workId: number }) {
   const intro = useMutation({ mutationFn: (s: Spoiler) => endpoints.intro(workId, s) });
 
   return (
-    <section className="card" aria-label="AI 소개">
+    <section className="ai-block" aria-label="AI 소개">
       <h2>AI 소개</h2>
       <div className="toolbar">
         <div className="segmented" role="group" aria-label="스포일러 단계">
@@ -135,7 +135,7 @@ function IntroSection({ workId }: { workId: number }) {
             줄거리 일부 포함
           </button>
         </div>
-        <button type="button" className="primary" disabled={intro.isPending} onClick={() => intro.mutate(spoiler)}>
+        <button type="button" className="primary ai" disabled={intro.isPending} onClick={() => intro.mutate(spoiler)}>
           {intro.isPending ? "만드는 중…" : "AI 소개 보기"}
         </button>
       </div>

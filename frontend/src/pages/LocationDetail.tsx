@@ -5,7 +5,7 @@ import { endpoints } from "../api/client";
 import { CertifyButton } from "../components/CertifyButton";
 import { SourceCards } from "../components/SourceCard";
 import { directionsUrl } from "../lib/kakao";
-import { stationLabel } from "../lib/station";
+import { StationBadge } from "../components/StationBadge";
 
 const CAUTION_TEXT: Record<string, string> = {
   private: "사유지입니다. 외부에서만 관람해 주세요.",
@@ -45,8 +45,9 @@ export function LocationDetail() {
         </ul>
       )}
       {d.station && (
-        <p>
-          최근접 역: {stationLabel(d.station.name, d.station.line)}{d.walk_min != null && ` · 걸어서 ${d.walk_min}분`}
+        <p className="meta-line">
+          가까운 역 <StationBadge name={d.station.name} line={d.station.line} />
+          {d.walk_min != null && <span className="muted">걸어서 {d.walk_min}분</span>}
         </p>
       )}
       {loc.lat != null && loc.lon != null ? (
