@@ -72,6 +72,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/works": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Works */
+        get: operations["list_works_api_works_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{work_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Work */
+        get: operations["get_work_api_works__work_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{work_id}/rating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Rating */
+        get: operations["get_rating_api_works__work_id__rating_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{work_id}/intro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get Intro */
+        post: operations["get_intro_api_works__work_id__intro_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -135,6 +203,62 @@ export interface components {
             gemini_usage: {
                 [key: string]: number;
             } | null;
+        };
+        /**
+         * ImagesOut
+         * @description 이미지는 원본 주소만 넘기고 파일은 저장하지 않는다(NO_STORE).
+         */
+        ImagesOut: {
+            /** Posters */
+            posters: string[];
+            /** Stills */
+            stills: string[];
+        };
+        /** IntroFallbackLocation */
+        IntroFallbackLocation: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Gu */
+            gu: string | null;
+        };
+        /** IntroFallbackOut */
+        IntroFallbackOut: {
+            /** Plot */
+            plot: string | null;
+            /** Locations */
+            locations: components["schemas"]["IntroFallbackLocation"][];
+        };
+        /** IntroIn */
+        IntroIn: {
+            /**
+             * Spoiler
+             * @default none
+             * @enum {string}
+             */
+            spoiler: "none" | "partial";
+        };
+        /** IntroOut */
+        IntroOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "degraded";
+            /** Sentences */
+            sentences: string[];
+            /** Ai Generated */
+            ai_generated: boolean;
+            /** Degraded */
+            degraded: boolean;
+            fallback: components["schemas"]["IntroFallbackOut"] | null;
+            /** Dropped Count */
+            dropped_count: number;
+            /** Source Ids */
+            source_ids: string[];
+            /** Sources */
+            sources: components["schemas"]["SourceCardOut"][];
         };
         /** LicenseOut */
         LicenseOut: {
@@ -220,12 +344,30 @@ export interface components {
             /** Default Station Id */
             default_station_id: string;
         };
+        /** PersonOut */
+        PersonOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+        };
         /** PhotoOut */
         PhotoOut: {
             /** Url */
             url: string;
             /** Title */
             title: string;
+        };
+        /** RatingOut */
+        RatingOut: {
+            /** Rating */
+            rating: string | null;
+            /** Source Ids */
+            source_ids: string[];
+            /** Sources */
+            sources: components["schemas"]["SourceCardOut"][];
         };
         /** SearchIn */
         SearchIn: {
@@ -315,6 +457,13 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VodOut */
+        VodOut: {
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+        };
         /** WorkBriefOut */
         WorkBriefOut: {
             /** Id */
@@ -323,6 +472,64 @@ export interface components {
             title: string;
             /** Release Year */
             release_year: number | null;
+        };
+        /** WorkDetailOut */
+        WorkDetailOut: {
+            work: components["schemas"]["WorkOut"];
+            /** People */
+            people: components["schemas"]["PersonOut"][];
+            /** Plot */
+            plot: string | null;
+            /** Keywords */
+            keywords: string[];
+            images: components["schemas"]["ImagesOut"];
+            /** Vod */
+            vod: components["schemas"]["VodOut"][];
+            /** Kmdb Link */
+            kmdb_link: string | null;
+            /** Locations */
+            locations: components["schemas"]["WorkLocationOut"][];
+            /** Related */
+            related: components["schemas"]["WorkBriefOut"][];
+            /** Source Ids */
+            source_ids: string[];
+            /** Sources */
+            sources: components["schemas"]["SourceCardOut"][];
+        };
+        /** WorkListOut */
+        WorkListOut: {
+            /** Items */
+            items: components["schemas"]["WorkOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+        };
+        /** WorkLocationOut */
+        WorkLocationOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Gu */
+            gu: string | null;
+            /** Lat */
+            lat: number | null;
+            /** Lon */
+            lon: number | null;
+        };
+        /** WorkOut */
+        WorkOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Release Year */
+            release_year: number | null;
+            /** Genres */
+            genres: string[];
+            /** Location Count */
+            location_count: number;
         };
     };
     responses: never;
@@ -442,6 +649,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetaOut"];
+                };
+            };
+        };
+    };
+    list_works_api_works_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                genre?: string | null;
+                sort?: "locations" | "year";
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_api_works__work_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rating_api_works__work_id__rating_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intro_api_works__work_id__intro_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntroIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntroOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

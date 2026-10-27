@@ -21,3 +21,7 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | GeminiProvider API | Interactions API(`/v1beta/interactions`, `response_format`, `output_text`) | 안정 API `models/{model}:generateContent`(`responseMimeType`·`responseJsonSchema`·`thinkingConfig.thinkingLevel`). 작업 환경에서 Interactions 문서를 확인할 수 없었음. 키를 받으면 실호출 1회로 확인하고, 바꾸려면 이 클래스만 고친다 | WP-06 |
 | 마스킹 위치 | LLMClient 안 | 부른 쪽(services)이 `PrivacyGuard.mask_inputs()`로 마스킹한 입력을 넘긴다. 계층 규칙상 data/ai_gateway가 support를 import할 수 없음 | WP-06 |
 | 상태 확인의 차단기 상태 | app.state.ai_breakers 딕셔너리 | `app.state.llm.breaker_states()`를 매번 읽음 | WP-06 |
+| 스포일러 단계 값 | API-004 {spoiler: none·partial} | 그대로 두되, build-plan의 "'일부' 단계 제거(④)"는 SRS FR-108의 두 단계(없음·일부)를 뜻하는 것으로 읽음 | WP-08 |
+| 미니 시드의 KMDb 항목 | KMDb는 ID_ONLY라 work.kmdb를 채우지 않음 | 개발용 가짜 줄거리·키워드를 work 1·3·9의 kmdb에 넣음(source DEV-SEED). 실데이터 적재 때는 정책을 따름 | WP-08 |
+| API-002 응답 | {work, people, plot, images, vod, locations, related, source_ids} | keywords·kmdb_link·sources를 더함. images는 {posters, stills} 주소 목록 | WP-08 |
+| API-004 응답 | {status, sentences, degraded, fallback, source_ids} | ai_generated·dropped_count·sources를 더함. 강등 fallback은 SRS UC-02 3b대로 두 단계 모두 원문 줄거리와 촬영지 목록 | WP-08 |

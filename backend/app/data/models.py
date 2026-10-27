@@ -172,6 +172,20 @@ class WorkDetail:
     people: list[Person]
     locations: list[WorkLocation]
     source_ids: list[str]
+    kmdb: dict | None = None  # KMDb 정책이 STORE일 때만 채워짐(TBD-01)
+
+
+@dataclass(frozen=True)
+class MovieInfo:
+    """KMDb 상세(저장본 또는 실시간). 이미지·예고편은 주소만 쓰고 파일은 저장하지 않는다."""
+
+    source_id: str
+    plot: str | None = None
+    keywords: list[str] = field(default_factory=list)
+    posters: list[str] = field(default_factory=list)
+    stills: list[str] = field(default_factory=list)
+    vods: list[dict] = field(default_factory=list)
+    link: str | None = None
 
 
 @dataclass(frozen=True)

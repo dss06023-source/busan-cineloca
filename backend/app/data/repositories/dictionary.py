@@ -38,3 +38,14 @@ class DictionaryRepository:
                 {"kind": kind, "vec": Vector(vec).to_text(), "k": k},
             )
             return [build(DictHit, r) for r in await cur.fetchall()]
+
+    async def lexicon(self) -> list[str]:
+        """근거 대조(EntityLexicon)에 쓸 지식베이스의 작품·인물·장소·구·군 이름."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT title AS name FROM work WHERE NOT retired"
+                " UNION SELECT name FROM person"
+                " UNION SELECT name FROM location WHERE NOT retired"
+                " UNION SELECT gu FROM location WHERE gu IS NOT NULL"
+            )
+            return [r["name"] for r in await cur.fetchall()]
