@@ -54,3 +54,4 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | 작품 매칭(WorkMatcher) | 점수 공식 미정 | 0.7×제목 유사도(정규화 후 difflib) + 0.3×연도 점수(같은 해 1.0, 1년 0.9, 2년 0.5, 그 밖 0, 모름 0.5). 검수 후보는 stg.work.match_candidate(마이그레이션 007)로 실어 반영 때 review_item에 넣고, 같은 작품·같은 후보는 다시 올리지 않음. 검수 연결 작품은 다음 동기화가 그 ID로 저장본을 채움 | WP-07 |
 | 관광사진(DATA-10) | TourAPI 관광사진 | 사용자가 신청한 TourAPI 국문(KorService2) locationBasedList2의 대표 이미지 중 cpyrhtDivCd가 Type1인 것만 사진 후보로 씀(TourPhotoClient) | WP-05 |
 | 원본 좌표·호선 | location·station에 위경도, station.line | 영화 속 부산정보(DATA-01)는 작품명·장소명·개봉일만, 씨네맵(DATA-02)은 도로명주소까지, 역사정보(DATA-08)는 역 코드·역명·주소·전화만 줌(2026-10-27 실제 응답). 좌표는 주소 좌표 API(DATA-06)로 받고, 호선은 다른 원본에서 채워야 함 | WP-05 |
+| 수집 병합 키 | ext_key = kmdb_id 또는 제목+연도 | 작품 ext_key는 "t:" + 정규화 제목(원본 DATA-02에 연도가 없어 연도를 넣으면 연도가 늦게 채워질 때 id가 바뀜), 촬영지는 정규화 장소명|구·군. 주소 없는 DATA-01 장소는 같은 이름이 주소와 함께 한 곳만 있을 때 그 주소를 씀 | WP-07 |

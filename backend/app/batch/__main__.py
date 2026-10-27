@@ -11,23 +11,32 @@ import sys
 from psycopg_pool import AsyncConnectionPool
 
 from app.batch.job import IngestStep, SyncJob
-from app.batch.steps import MatchWorksStep
+from app.batch.steps import CollectStep, MatchWorksStep
 from app.config import Settings, get_settings
+from app.data.adapters.busan import CineMapClient, FilmLocationClient
+from app.data.adapters.config import load_adapters
+from app.data.adapters.http import new_http_client
 from app.data.adapters.kmdb_csv import KmdbCsvCatalog
 from app.data.adapters.policy import PolicyGuard
 from app.data.db import make_pool
 from app.data.repositories.source import SourceRepository
 from app.data.repositories.staging import StagingRepository
 from app.data.repositories.sync import SyncRepository
+from app.data.repositories.usage import UsageRepository
 from app.data.repositories.work import WorkRepository
 
 POLL_S = 60
 
 
-async def build_steps(settings: Settings, pool: AsyncConnectionPool) -> list[IngestStep]:
-    # 수집·좌표·역·태그·AI 제안·출처·임베딩 단계는 WP-05 어댑터와 함께 붙인다.
-    # 수집 단계가 없으면 적재 건수가 0이라 건수 가드가 반영을 막는다
+async def build_steps(settings: Settings, pool: AsyncConnectionPool, http) -> list[IngestStep]:
+    # 좌표·역·태그·AI 제안·출처·임베딩 단계는 해당 어댑터가 생기면 붙인다.
+    # 수집 단계가 없으면(DATA_GO_KR_KEY 없음) 적재 건수가 0이라 건수 가드가 반영을 막는다
     steps: list[IngestStep] = []
+    if settings.data_go_kr_key:
+        conf, usage = load_adapters(), UsageRepository(pool)
+        sources = [cls(http, settings.data_go_kr_key, conf[cls.name], usage=usage)
+                   for cls in (FilmLocationClient, CineMapClient)]  # fmt: skip
+        steps.append(CollectStep(sources))
     if settings.kmdb_csv_path:  # KMDb 키 승인 전에는 CSV로 매칭한다(로드 약 8초)
         policy = PolicyGuard.from_sources(await SourceRepository(pool).all())
         catalog = KmdbCsvCatalog.load(settings.kmdb_csv_path)
@@ -40,7 +49,8 @@ async def main(once: bool) -> None:
     pool = make_pool(settings.database_url)
     await pool.open()
     runs = SyncRepository(pool)
-    job = SyncJob(await build_steps(settings, pool), StagingRepository(pool), runs)
+    http = new_http_client()
+    job = SyncJob(await build_steps(settings, pool, http), StagingRepository(pool), runs)
     try:
         while True:
             run = await runs.next_requested()
@@ -51,6 +61,7 @@ async def main(once: bool) -> None:
                 return
             await asyncio.sleep(POLL_S)
     finally:
+        await http.aclose()
         await pool.close()
 
 
