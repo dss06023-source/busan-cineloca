@@ -369,6 +369,102 @@
         }
       }
     },
+    "/api/query": {
+      "post": {
+        "tags": [
+          "AI 탐색"
+        ],
+        "summary": "Ask",
+        "operationId": "ask_api_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "post": {
+        "tags": [
+          "AI 탐색"
+        ],
+        "summary": "Search",
+        "operationId": "search_api_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilterSearchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/query/session": {
+      "delete": {
+        "tags": [
+          "AI 탐색"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_query_session_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
     "/api/sources": {
       "get": {
         "tags": [
@@ -393,6 +489,31 @@
   },
   "components": {
     "schemas": {
+      "AskIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "here": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PointIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "AskIn"
+      },
       "BaseIn": {
         "properties": {
           "lat": {
@@ -449,6 +570,260 @@
         "type": "object",
         "title": "BaseIn",
         "description": "기준 위치: 좌표, 역, 구·군 중 하나. 좌표는 요청 본문으로만 받고 저장·기록하지 않는다(NFR-003)."
+      },
+      "ChipOut": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "work_ids",
+              "person_ids",
+              "genres",
+              "gus",
+              "years",
+              "travel"
+            ],
+            "title": "Field"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "label"
+        ],
+        "title": "ChipOut"
+      },
+      "ChoiceOut": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "surface": {
+            "type": "string",
+            "title": "Surface"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "surface",
+          "label",
+          "value"
+        ],
+        "title": "ChoiceOut"
+      },
+      "CriteriaIO": {
+        "properties": {
+          "work_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Ids"
+          },
+          "person_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Ids"
+          },
+          "genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genres"
+          },
+          "gus": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gus"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2100.0,
+                "minimum": 1900.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2100.0,
+                "minimum": 1900.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year To"
+          },
+          "base_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "station",
+                  "any_station",
+                  "location",
+                  "point"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Kind"
+          },
+          "station_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Station Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PointIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "travel_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "walk",
+                  "subway"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Mode"
+          },
+          "travel_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Min"
+          },
+          "result_type": {
+            "type": "string",
+            "enum": [
+              "LOCATION",
+              "WORK"
+            ],
+            "title": "Result Type",
+            "default": "LOCATION"
+          }
+        },
+        "type": "object",
+        "title": "CriteriaIO",
+        "description": "해석한 조건(칩)과 필터 패널 입력의 공통 모양."
+      },
+      "FilterSearchIn": {
+        "properties": {
+          "criteria": {
+            "$ref": "#/components/schemas/CriteriaIO"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 20,
+            "title": "Labels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "criteria"
+        ],
+        "title": "FilterSearchIn"
       },
       "FiltersIn": {
         "properties": {
@@ -866,6 +1241,92 @@
         ],
         "title": "LocationDetailOut"
       },
+      "LocationItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          },
+          "distance_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance M"
+          },
+          "travel_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Min"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/ResultWorkOut"
+            },
+            "type": "array",
+            "title": "Works"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "gu",
+          "lat",
+          "lon",
+          "distance_m",
+          "travel_min",
+          "works"
+        ],
+        "title": "LocationItemOut"
+      },
       "LocationOut": {
         "properties": {
           "id": {
@@ -1096,6 +1557,165 @@
         ],
         "title": "PhotoOut"
       },
+      "PointIO": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "maximum": 35.5,
+            "minimum": 34.8,
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "maximum": 129.4,
+            "minimum": 128.7,
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon"
+        ],
+        "title": "PointIO"
+      },
+      "QueryOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "RELAXED",
+              "NOT_FOUND",
+              "NEEDS_CHOICE",
+              "OUT_OF_SCOPE",
+              "FALLBACK"
+            ],
+            "title": "Status"
+          },
+          "chips": {
+            "items": {
+              "$ref": "#/components/schemas/ChipOut"
+            },
+            "type": "array",
+            "title": "Chips"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOut"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notices"
+          },
+          "criteria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CriteriaIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Labels"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LocationItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItemOut"
+            },
+            "type": "array",
+            "title": "Works"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relaxed": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "travel",
+                "years",
+                "genres",
+                "gus"
+              ]
+            },
+            "type": "array",
+            "title": "Relaxed"
+          },
+          "masked": {
+            "type": "boolean",
+            "title": "Masked"
+          },
+          "prefill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CriteriaIO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "chips",
+          "choices",
+          "notices",
+          "criteria",
+          "labels",
+          "items",
+          "works",
+          "summary",
+          "relaxed",
+          "masked",
+          "prefill",
+          "source_ids",
+          "sources"
+        ],
+        "title": "QueryOut"
+      },
       "RatingOut": {
         "properties": {
           "rating": {
@@ -1131,6 +1751,36 @@
           "sources"
         ],
         "title": "RatingOut"
+      },
+      "ResultWorkOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "release_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "release_year"
+        ],
+        "title": "ResultWorkOut"
       },
       "SearchIn": {
         "properties": {
@@ -1349,6 +1999,32 @@
         ],
         "title": "StationOut"
       },
+      "SummaryOut": {
+        "properties": {
+          "sentences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sentences"
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated"
+          },
+          "dropped_count": {
+            "type": "integer",
+            "title": "Dropped Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentences",
+          "ai_generated",
+          "dropped_count"
+        ],
+        "title": "SummaryOut"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1538,6 +2214,49 @@
           "sources"
         ],
         "title": "WorkDetailOut"
+      },
+      "WorkItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "release_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Year"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres"
+          },
+          "location_count": {
+            "type": "integer",
+            "title": "Location Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "release_year",
+          "genres",
+          "location_count"
+        ],
+        "title": "WorkItemOut"
       },
       "WorkListOut": {
         "properties": {

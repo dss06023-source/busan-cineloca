@@ -25,3 +25,8 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | 미니 시드의 KMDb 항목 | KMDb는 ID_ONLY라 work.kmdb를 채우지 않음 | 개발용 가짜 줄거리·키워드를 work 1·3·9의 kmdb에 넣음(source DEV-SEED). 실데이터 적재 때는 정책을 따름 | WP-08 |
 | API-002 응답 | {work, people, plot, images, vod, locations, related, source_ids} | keywords·kmdb_link·sources를 더함. images는 {posters, stills} 주소 목록 | WP-08 |
 | API-004 응답 | {status, sentences, degraded, fallback, source_ids} | ai_generated·dropped_count·sources를 더함. 강등 fallback은 SRS UC-02 3b대로 두 단계 모두 원문 줄거리와 촬영지 목록 | WP-08 |
+| 계층 계약 | services와 pipeline이 같은 층(서로 import 금지) | api → services → pipeline → support → data. build-plan 4장대로 services가 pipeline의 공용 부품(QueryPipeline·RoutePlanner)을 씀 | WP-09 |
+| API-013 입력 | {text} | {text, here?}. 기준이 '현재 위치'일 때만 브라우저 좌표를 받고 저장·기록하지 않음 | WP-09 |
+| API-013 응답 | {status, chips, choices, items, summary, relaxed, masked, prefill} | notices(사전에 없어 뺀 조건), criteria·labels(칩 삭제·선택 뒤 API-014로 다시 검색), works(result_type WORK), source_ids·sources를 더함 | WP-09 |
+| 기준 없는 '걸어서 N분' | 정의 없음 | 기준 위치 없이 도보 조건만 있거나 기준 역 이름이 '지하철역'처럼 일반 명사면 '아무 역에서 걸어서 N분'(T3)으로 봄. 기준만 있고 이동 조건이 없으면 반경 1km | WP-09 |
+| API-014 입력 | {conditions} | {criteria, labels}. criteria는 API-013 응답의 criteria와 같은 모양 | WP-09 |
