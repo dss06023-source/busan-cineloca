@@ -140,6 +140,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["ask_api_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search */
+        post: operations["search_api_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/query/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Reset */
+        delete: operations["reset_api_query_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -161,6 +212,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AskIn */
+        AskIn: {
+            /** Text */
+            text: string;
+            here?: components["schemas"]["PointIO"] | null;
+        };
         /**
          * BaseIn
          * @description 기준 위치: 좌표, 역, 구·군 중 하나. 좌표는 요청 본문으로만 받고 저장·기록하지 않는다(NFR-003).
@@ -174,6 +231,70 @@ export interface components {
             station_id?: string | null;
             /** Gu */
             gu?: string | null;
+        };
+        /** ChipOut */
+        ChipOut: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "work_ids" | "person_ids" | "genres" | "gus" | "years" | "travel";
+            /** Label */
+            label: string;
+        };
+        /** ChoiceOut */
+        ChoiceOut: {
+            /** Field */
+            field: string;
+            /** Surface */
+            surface: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * CriteriaIO
+         * @description 해석한 조건(칩)과 필터 패널 입력의 공통 모양.
+         */
+        CriteriaIO: {
+            /** Work Ids */
+            work_ids?: number[] | null;
+            /** Person Ids */
+            person_ids?: number[] | null;
+            /** Genres */
+            genres?: string[] | null;
+            /** Gus */
+            gus?: string[] | null;
+            /** Year From */
+            year_from?: number | null;
+            /** Year To */
+            year_to?: number | null;
+            /** Base Kind */
+            base_kind?: ("station" | "any_station" | "location" | "point") | null;
+            /** Station Id */
+            station_id?: string | null;
+            /** Location Id */
+            location_id?: number | null;
+            point?: components["schemas"]["PointIO"] | null;
+            /** Travel Mode */
+            travel_mode?: ("walk" | "subway") | null;
+            /** Travel Min */
+            travel_min?: number | null;
+            /**
+             * Result Type
+             * @default LOCATION
+             * @enum {string}
+             */
+            result_type: "LOCATION" | "WORK";
+        };
+        /** FilterSearchIn */
+        FilterSearchIn: {
+            criteria: components["schemas"]["CriteriaIO"];
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
         };
         /** FiltersIn */
         FiltersIn: {
@@ -295,6 +416,25 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["SourceCardOut"][];
         };
+        /** LocationItemOut */
+        LocationItemOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Gu */
+            gu: string | null;
+            /** Lat */
+            lat: number | null;
+            /** Lon */
+            lon: number | null;
+            /** Distance M */
+            distance_m: number | null;
+            /** Travel Min */
+            travel_min: number | null;
+            /** Works */
+            works: components["schemas"]["ResultWorkOut"][];
+        };
         /** LocationOut */
         LocationOut: {
             /** Id */
@@ -360,6 +500,46 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** PointIO */
+        PointIO: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+        };
+        /** QueryOut */
+        QueryOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "OK" | "RELAXED" | "NOT_FOUND" | "NEEDS_CHOICE" | "OUT_OF_SCOPE" | "FALLBACK";
+            /** Chips */
+            chips: components["schemas"]["ChipOut"][];
+            /** Choices */
+            choices: components["schemas"]["ChoiceOut"][];
+            /** Notices */
+            notices: string[];
+            criteria: components["schemas"]["CriteriaIO"] | null;
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /** Items */
+            items: components["schemas"]["LocationItemOut"][];
+            /** Works */
+            works: components["schemas"]["WorkItemOut"][];
+            summary: components["schemas"]["SummaryOut"] | null;
+            /** Relaxed */
+            relaxed: ("travel" | "years" | "genres" | "gus")[];
+            /** Masked */
+            masked: boolean;
+            prefill: components["schemas"]["CriteriaIO"] | null;
+            /** Source Ids */
+            source_ids: string[];
+            /** Sources */
+            sources: components["schemas"]["SourceCardOut"][];
+        };
         /** RatingOut */
         RatingOut: {
             /** Rating */
@@ -368,6 +548,15 @@ export interface components {
             source_ids: string[];
             /** Sources */
             sources: components["schemas"]["SourceCardOut"][];
+        };
+        /** ResultWorkOut */
+        ResultWorkOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Release Year */
+            release_year: number | null;
         };
         /** SearchIn */
         SearchIn: {
@@ -444,6 +633,15 @@ export interface components {
             /** Gu */
             gu: string;
         };
+        /** SummaryOut */
+        SummaryOut: {
+            /** Sentences */
+            sentences: string[];
+            /** Ai Generated */
+            ai_generated: boolean;
+            /** Dropped Count */
+            dropped_count: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -495,6 +693,19 @@ export interface components {
             source_ids: string[];
             /** Sources */
             sources: components["schemas"]["SourceCardOut"][];
+        };
+        /** WorkItemOut */
+        WorkItemOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Release Year */
+            release_year: number | null;
+            /** Genres */
+            genres: string[];
+            /** Location Count */
+            location_count: number;
         };
         /** WorkListOut */
         WorkListOut: {
@@ -781,6 +992,90 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    ask_api_query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_api_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilterSearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_api_query_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -55,11 +55,11 @@ markers = ["integration: 실제 PostgreSQL(TEST_DATABASE_URL)이 필요한 테�
 root_package = "app"
 include_external_packages = true
 
-# 4장 계층 계약: api → services·pipeline → support → data
+# 4장 계층 계약: api → services → pipeline → support → data. services는 pipeline의 공용 부품(QueryPipeline·RoutePlanner)을 쓴다
 [[tool.importlinter.contracts]]
 name = "계층: api → services·pipeline → support → data"
 type = "layers"
-layers = ["app.api", "app.services | app.pipeline", "app.support", "app.data"]
+layers = ["app.api", "app.services", "app.pipeline", "app.support", "app.data"]
 
 # services 아래 모듈끼리는 서로 import하지 않는다
 [[tool.importlinter.contracts]]
