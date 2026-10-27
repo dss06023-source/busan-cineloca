@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
-ALLOWED = [APP / "data" / "repositories", APP / "data" / "migrate.py"]
+# 마이그레이션 러너와 시드 적재는 SQL 파일을 그대로 실행하는 도구라 예외로 둔다
+ALLOWED = [APP / "data" / "repositories", APP / "data" / "migrate.py", APP / "data" / "seed.py"]
 PATTERN = re.compile(r"\.execute(many)?\(")
 
 

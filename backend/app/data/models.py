@@ -123,3 +123,108 @@ class SourceCard:
 class Page:
     items: list = field(default_factory=list)
     total: int = 0
+
+
+@dataclass(frozen=True)
+class Work:
+    id: int
+    title: str
+    release_year: int | None
+    genres: list[str]
+    source_id: str
+    kmdb_id: str | None = None
+    kobis_movie_cd: str | None = None
+    location_count: int = 0
+
+
+@dataclass(frozen=True)
+class WorkQuery:
+    """작품 목록 조건(API-001). sort는 year·locations만."""
+
+    q: str | None = None
+    genre: str | None = None
+    sort: Literal["year", "locations"] = "locations"
+    page: int = 1
+
+
+@dataclass(frozen=True)
+class Person:
+    id: int
+    name: str
+    role: str
+    ord: int
+
+
+@dataclass(frozen=True)
+class WorkLocation:
+    id: int
+    name: str
+    gu: str | None
+    lat: float | None
+    lon: float | None
+    source_id: str
+
+
+@dataclass(frozen=True)
+class WorkDetail:
+    work: Work
+    people: list[Person]
+    locations: list[WorkLocation]
+    source_ids: list[str]
+
+
+@dataclass(frozen=True)
+class CourseStop:
+    ord: int
+    location_id: int
+    dwell_min: int = 20
+    leg_mode: str | None = None
+    leg_min: int | None = None
+    leg_line: str | None = None
+
+
+@dataclass(frozen=True)
+class Course:
+    theme: Literal["work", "actor", "area"]
+    title: str
+    start_label: str
+    start_lat: float
+    start_lon: float
+    total_min: int
+    total_m: int
+    stops: list[CourseStop] = field(default_factory=list)
+    theme_ref: str | None = None
+    status: Literal["draft", "approved"] = "draft"
+    id: int | None = None
+
+
+@dataclass(frozen=True)
+class DictHit:
+    kind: str
+    surface: str
+    canonical_id: str
+    score: float
+
+
+@dataclass(frozen=True)
+class ReviewItem:
+    id: int
+    kind: str
+    target_type: str
+    target_id: int
+    proposal: dict | None
+    proposer: str | None
+    model: str | None
+    score: float | None
+    status: str
+
+
+@dataclass(frozen=True)
+class SyncRun:
+    id: int
+    trigger: str
+    status: str
+    requested_by: str
+    counts: dict | None = None
+    prev_counts: dict | None = None
+    failures: list | dict | None = None
