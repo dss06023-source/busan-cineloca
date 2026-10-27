@@ -71,7 +71,9 @@ class LocationRepository:
     async def add_tags(self, location_id: int, tags: list[str]) -> Location | None:
         """승인된 태그만 넣는다(BR-04). 이미 있는 태그는 다시 넣지 않는다."""
         rows = await self._run(
-            "UPDATE location SET tags = ARRAY(SELECT DISTINCT unnest(tags || %(tags)s::text[]) ORDER BY 1)"
+            # 정렬은 DB 로캘과 상관없이 코드 순서로(COLLATE "C")
+            "UPDATE location SET tags = ARRAY(SELECT t FROM (SELECT DISTINCT unnest(tags || %(tags)s::text[]) AS t) u"
+            ' ORDER BY t COLLATE "C")'
             f" WHERE id = %(id)s AND NOT retired RETURNING {_LOCATION_COLS}",
             {"id": location_id, "tags": tags},
         )
