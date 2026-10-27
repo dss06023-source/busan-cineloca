@@ -4,6 +4,7 @@ import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
 import { Ask } from "./pages/Ask";
+import { AdminCourses } from "./pages/admin/AdminCourses";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
 import { AdminReviews } from "./pages/admin/AdminReviews";
@@ -39,6 +40,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to="/admin/sync" replace /> },
       { path: "sync", element: <AdminSync /> },
       { path: "reviews", element: <AdminReviews /> },
+      { path: "courses", element: <AdminCourses /> },
     ],
   },
   {

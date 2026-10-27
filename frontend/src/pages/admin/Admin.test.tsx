@@ -85,3 +85,45 @@ describe("관리자 화면(UI-10·11)", () => {
     expect(await within(form).findByText(/저장했습니다: 부산역 광장 · private/)).toBeTruthy();
   });
 });
+
+describe("추천 코스 관리(UI-12)", () => {
+  it("순서 바꾸기는 범위 안에서만", async () => {
+    const { move } = await import("./AdminCourses");
+    expect(move([1, 2, 3], 0, 1)).toEqual([2, 1, 3]);
+    expect(move([1, 2, 3], 0, -1)).toEqual([1, 2, 3]);
+  });
+
+  it("목록, 순서 바꿔 다시 계산하면 초안, 승인 버튼", async () => {
+    let sent: unknown = null;
+    server.use(
+      http.patch("/api/admin/courses", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ error: { code: "ERR-001", message: "입력 값을 확인해 주세요(테스트)" } }, { status: 422 });
+      }),
+    );
+    renderAt("/admin/courses");
+    const card = await screen.findByRole("listitem", { name: "코스 3" });
+    expect(within(card).getByText("초안")).toBeTruthy();
+    expect(within(screen.getByRole("listitem", { name: "코스 1" })).getByText("공개")).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "동백섬 위로" }));
+    const names = within(within(card).getByRole("list", { name: "장소 순서" })).getAllByRole("listitem").map((li) => li.textContent);
+    expect(names[0]).toMatch(/^동백섬/);
+    expect(within(card).getByRole("button", { name: "승인" })).toHaveProperty("disabled", true);
+    await userEvent.click(within(card).getByRole("button", { name: "이 순서로 다시 계산" }));
+    expect(await within(card).findByText(/테스트/)).toBeTruthy();
+    expect(sent).toEqual({ id: 3, stops: [2, 1, 3] });
+  });
+
+  it("후보 만들기: 실패하면 이유, 성공하면 안내", async () => {
+    renderAt("/admin/courses");
+    const form = await screen.findByRole("form", { name: "코스 후보 만들기" });
+    const input = within(form).getByPlaceholderText(/구·군 이름/);
+    await userEvent.type(input, "없는구");
+    await userEvent.click(within(form).getByRole("button", { name: "후보 만들기" }));
+    expect(await within(form).findByText(/0곳뿐이라/)).toBeTruthy();
+    await userEvent.clear(input);
+    await userEvent.type(input, "중구");
+    await userEvent.click(within(form).getByRole("button", { name: "후보 만들기" }));
+    expect(await within(form).findByText("초안을 만들었습니다: 중구 촬영지 산책")).toBeTruthy();
+  });
+});
