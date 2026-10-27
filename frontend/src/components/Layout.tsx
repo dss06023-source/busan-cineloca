@@ -1,12 +1,13 @@
 // 사용자 화면 공통: 하단 탭 5개(지도·작품·AI 탐색·코스·내 기록), 상세 화면의 뒤로 가기, 탭 제목, 스크롤 위치 복원.
 import { useEffect } from "react";
-import { NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from "react-router";
 
+// merged: 넓은 화면에서는 첫 화면 3단에 들어 있어 위쪽 막대에서 숨기는 메뉴
 const TABS = [
-  { to: "/", label: "지도", end: true },
-  { to: "/works", label: "작품" },
-  { to: "/ask", label: "AI 탐색" },
-  { to: "/courses", label: "코스" },
+  { to: "/", label: "지도", end: true, merged: true },
+  { to: "/works", label: "작품", merged: true },
+  { to: "/ask", label: "AI 탐색", merged: true },
+  { to: "/courses", label: "코스", merged: true },
   { to: "/me", label: "내 기록" },
 ];
 
@@ -63,11 +64,11 @@ export function Layout() {
       </main>
       <nav className="tabs" aria-label="주 메뉴">
         {/* 넓은 화면에서만 보이는 이름(위쪽 막대). 휴대폰은 하단 탭만 */}
-        <span className="brand" aria-hidden="true">
+        <Link className="brand" to="/">
           부산 씨네로케
-        </span>
+        </Link>
         {TABS.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
+          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => ["tab", isActive && "active", t.merged && "merged"].filter(Boolean).join(" ")}>
             {t.label}
           </NavLink>
         ))}

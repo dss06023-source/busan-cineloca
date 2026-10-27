@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -38,6 +38,14 @@ describe("공통 레이아웃", () => {
     expect(document.title).toBe("작품 · 부산 씨네로케");
     expect(pageTitle("/courses/saved/abc")).toBe("코스 · 부산 씨네로케");
     expect(pageTitle("/admin")).toBe("부산 씨네로케");
+  });
+
+  it("첫 화면 3단에 들어 있는 메뉴는 넓은 화면에서 숨길 수 있게 표시하고, 내 기록은 남긴다", async () => {
+    renderAt(["/me"]);
+    const nav = await screen.findByRole("navigation", { name: "주 메뉴" });
+    expect(within(nav).getByRole("link", { name: "작품" }).className).toContain("merged");
+    expect(within(nav).getByRole("link", { name: "내 기록" }).className).not.toContain("merged");
+    expect(within(nav).getByRole("link", { name: "부산 씨네로케" }).getAttribute("href")).toBe("/");
   });
 
   it("없는 주소는 안내와 홈 링크를 보여 준다", async () => {

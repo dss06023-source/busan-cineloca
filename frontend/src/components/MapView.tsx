@@ -38,6 +38,8 @@ export function MapView({ center, items, selectedId = null, tone = "default", on
       if (!alive) return;
       if (!k || !box.current) return onUnavailable();
       map.current = new k.maps.Map(box.current, { center: new k.maps.LatLng(center.lat, center.lon), level: 5 });
+      // 요약 카드가 왼쪽 아래에 뜨므로 카카오 로고·축척은 오른쪽 아래로(FR-706: 가리지 않음)
+      map.current.setCopyrightPosition?.(k.maps.CopyrightPosition.BOTTOMRIGHT, true);
       clusterer.current = new k.maps.MarkerClusterer({
         map: map.current,
         averageCenter: true,

@@ -8,6 +8,7 @@ import { useNotice } from "../components/NoticeGate";
 import { formatMinutes, RouteView } from "../components/RouteView";
 import { probe } from "../lib/geo";
 import { listSaved, MAX_SAVED, removeSaved, saveCourse, type SavedCourse } from "../lib/savedCourses";
+import { StationBadge } from "../components/StationBadge";
 import { stationLabel } from "../lib/station";
 
 const TABS = [
@@ -48,6 +49,8 @@ export function Courses() {
 
 function Recommended() {
   const [theme, setTheme] = useState("");
+  const meta = useQuery({ queryKey: ["meta"], queryFn: endpoints.meta, staleTime: Infinity });
+  const startLine = (label: string) => meta.data?.stations.find((s) => stationLabel(s.name) === stationLabel(label))?.line;
   const q = useQuery({ queryKey: ["courses", theme], queryFn: () => endpoints.courses(theme || undefined) });
   return (
     <div>
@@ -67,7 +70,10 @@ function Recommended() {
             <Link className="list-item tt-row" to={`/courses/${c.id}`}>
               <span className="tt-main">
                 <strong>{c.title}</strong>
-                <span className="muted">{c.start_label} 출발</span>
+                <span className="meta-line">
+                  <StationBadge name={c.start_label} line={startLine(c.start_label)} />
+                  <span className="muted">출발</span>
+                </span>
               </span>
               <span className="tt-num">
                 <span className="num">{c.stop_count}</span>곳
