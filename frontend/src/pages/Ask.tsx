@@ -24,7 +24,7 @@ const BUSAN_STATION = { lat: 35.1152, lon: 129.0422 };
 
 type Run = { kind: "ask"; text: string } | { kind: "search"; criteria: Criteria; labels: Record<string, string> };
 
-export function Ask() {
+export function Ask({ embedded = false }: { embedded?: boolean }) {
   const [accepted] = useNotice();
   const [text, setText] = useState("");
   const [panel, setPanel] = useState<Criteria | null>(null);
@@ -74,7 +74,7 @@ export function Ask() {
   return (
     <section className="page">
       <div className="toolbar">
-        <h1 style={{ flex: 1, margin: 0 }}>AI 탐색</h1>
+        <h1 className="grow">AI 탐색</h1>
         <button type="button" className="button" onClick={newChat}>
           새 대화
         </button>
@@ -157,7 +157,8 @@ export function Ask() {
       )}
       {out && !out.summary && out.masked && <p className="muted">개인정보를 가리고 보냈습니다.</p>}
 
-      {mapItems.length > 0 && !noMap && (
+      {/* 첫 화면 3단에서는 가운데 지도가 따로 있어 작은 지도를 그리지 않는다 */}
+      {!embedded && mapItems.length > 0 && !noMap && (
         <MapView center={mapItems[0] ?? BUSAN_STATION} items={mapItems} onSelect={() => undefined} onUnavailable={() => setNoMap(true)} />
       )}
       {out && out.items.length > 0 && (
