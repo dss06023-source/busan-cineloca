@@ -108,13 +108,23 @@ class WorkRepository:
         return result
 
     async def set_match(self, work_id: int, kmdb_id: str) -> bool:
-        """검수에서 승인한 KMDb 연결(BR-11). 다른 작품이 쓰는 kmdb_id면 UniqueViolation."""
+        """검수에서 승인한 KMDb 연결(BR-11). 다른 작품이 쓰는 kmdb_id면 UniqueViolation.
+        연결이 바뀌면 이전 저장본(kmdb)은 비우고, 다음 동기화가 새 ID로 채운다."""
         async with self.pool.connection() as conn:
             cur = await conn.execute(
-                "UPDATE work SET kmdb_id = %(k)s, match_status = 'reviewed' WHERE id = %(id)s RETURNING id",
+                "UPDATE work SET kmdb = CASE WHEN kmdb_id = %(k)s THEN kmdb END, kmdb_id = %(k)s,"
+                " match_status = 'reviewed' WHERE id = %(id)s RETURNING id",
                 {"id": work_id, "k": kmdb_id},
             )
             return await cur.fetchone() is not None
+
+    async def reviewed_matches(self) -> dict[str, str]:
+        """관리자가 검수로 연결한 작품의 ext_key → kmdb_id. 동기화가 이 연결로 저장본을 채운다."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT ext_key, kmdb_id FROM work WHERE match_status = 'reviewed' AND kmdb_id IS NOT NULL"
+            )
+            return {r["ext_key"]: r["kmdb_id"] for r in await cur.fetchall()}
 
     async def person_name(self, person_id: int) -> str | None:
         async with self.pool.connection() as conn:
