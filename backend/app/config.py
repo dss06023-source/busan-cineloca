@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     log_dir: str = "logs"
     ai_providers: str = "gemini"
     gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_api_key: str = ""
+    ollama_url: str = ""  # 임베딩(bge-m3)
+    ollama_llm_url: str = ""  # 로컬 LLM(선택). 비우면 체인에서 빠짐
+    fake_ai_mode: str = "ok"  # AI_PROVIDERS=fake일 때 ok|timeout|429|500|bad_schema
     # 세션당 AI 요청 분당 한도(AI-REQ-15, ERR-011)
     ai_rate_per_min: int = 5
 

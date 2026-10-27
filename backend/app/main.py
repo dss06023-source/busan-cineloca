@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from app.api.assembler import Assembler
@@ -10,6 +11,7 @@ from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
 from app.api.routers import health, locations, sources
 from app.config import Settings, get_settings
+from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
 from app.data.repositories.location import LocationRepository
 from app.data.repositories.source import SourceRepository
@@ -22,18 +24,21 @@ from app.support.sources import SourceRegistry
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     pool = make_pool(settings.database_url)
+    http = httpx.AsyncClient()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await pool.open(wait=False)
         yield
+        await http.aclose()
         await pool.close()
 
     app = FastAPI(title="부산 씨네로케 API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.pool = pool
     app.state.ai_limiter = TokenBucketLimiter(settings.ai_rate_per_min)
-    app.state.ai_breakers = {}  # WP-06 AI 게이트웨이가 공급자별 차단기 상태로 채운다
+    app.state.llm = build_llm_client(settings, pool, http)
+    app.state.embedder = build_embedder(settings, http)
     app.state.map_service = MapService(LocationRepository(pool), StationRepository(pool), WorkRepository(pool))
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
