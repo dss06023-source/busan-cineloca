@@ -146,3 +146,8 @@ class KmdbCsvCatalog:
         if m is None:
             raise AdapterError(f"kmdb_csv: unknown id {kmdb_id}")
         return MovieInfo(source_id=SOURCE_ID, plot=m.plot, keywords=list(m.keywords), link=m.link)
+
+
+def stored_kmdb(m: KmdbMovie) -> dict:
+    """work.kmdb에 넣을 저장본(TBD-01 결정: 줄거리·키워드·링크 저장). 키 이름은 archive.info_from_stored와 맞춘다."""
+    return {"source_id": SOURCE_ID, "plot": m.plot, "keywords": list(m.keywords), "link": m.link}
