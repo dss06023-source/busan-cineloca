@@ -25,7 +25,7 @@ from app.pipeline.course.scoring import (
     Scored,
     course_config,
 )
-from app.pipeline.travel import haversine_m, walk_minutes
+from app.pipeline.travel import haversine_m, station_label, walk_minutes
 from app.support.grounding import GroundingVerifier, LexiconCache, PhraseFilter
 from app.support.privacy import mask
 
@@ -132,7 +132,7 @@ class CourseService:
             s = await self.stations.get(start.station_id)
             if s is None:
                 raise InvalidInput("start.station_id")
-            return Place(None, f"{s.name}역", s.lat, s.lon, s.id, 0)
+            return Place(None, station_label(s.name), s.lat, s.lon, s.id, 0)
         if start.kind == "location":
             locs = await self.locations.many([start.location_id])
             if not locs or locs[0].lat is None:

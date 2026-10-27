@@ -1,4 +1,4 @@
-"""API-020 관리자 로그인, API-021 동기화 요청·리포트, API-022 검수 큐, API-023 촬영지 속성 편집."""
+"""API-020 관리자 로그인, API-021 동기화 요청·리포트, API-022 검수 큐, API-023 촬영지 속성 편집, API-024 추천 코스."""
 
 from datetime import datetime
 from typing import Literal
@@ -12,6 +12,7 @@ from app.api.deps import get_pool
 from app.api.errors import AppError
 from app.data.models import LocationAttrs
 from app.data.repositories import health as usage_repo
+from app.services.admin.courses import AdminCourse, CourseAdmin
 from app.services.admin.service import AdminService, Conflict, InvalidInput, NotFound
 
 router = APIRouter(tags=["관리자"])
@@ -173,3 +174,79 @@ async def update_location(
     except InvalidInput as e:
         raise AppError("ERR-001", f"입력 값을 확인해 주세요({e})") from None
     return AdminLocationOut(**{k: getattr(loc, k) for k in AdminLocationOut.model_fields})
+
+
+def get_course_admin(request: Request) -> CourseAdmin:
+    return request.app.state.course_admin
+
+
+class AdminStopOut(BaseModel):
+    ord: int
+    location_id: int
+    name: str | None
+    leg_mode: str | None  # 이전 지점(첫 장소는 출발지)에서 오는 구간
+    leg_min: int | None
+    leg_line: str | None
+
+
+class AdminCourseOut(BaseModel):
+    id: int
+    theme: str
+    theme_ref: str | None
+    title: str
+    status: str
+    start_label: str
+    total_min: int
+    total_m: int
+    stops: list[AdminStopOut]
+
+
+class AdminCourseListOut(BaseModel):
+    items: list[AdminCourseOut]
+
+
+class CourseDraftIn(BaseModel):
+    theme: Literal["work", "actor", "area"]
+    ref: str = Field(min_length=1, max_length=20)  # 작품 id, 인물 id, 구·군 이름
+    title: str | None = Field(None, max_length=60)
+
+
+class CourseEditIn(BaseModel):
+    id: int
+    stops: list[int] | None = None  # 이 순서로 다시 계산하고 초안으로 돌린다
+    title: str | None = Field(None, max_length=60)
+    status: Literal["draft", "approved"] | None = None
+
+
+def _course(a: AdminCourse) -> AdminCourseOut:
+    c = a.course
+    stops = [AdminStopOut(**s.__dict__, name=a.names.get(s.location_id)) for s in c.stops]
+    fields = ("id", "theme", "theme_ref", "title", "status", "start_label", "total_min", "total_m")
+    return AdminCourseOut(**{k: getattr(c, k) for k in fields}, stops=stops)
+
+
+@router.get("/api/admin/courses", response_model=AdminCourseListOut)
+async def courses(_: str = Depends(require_admin), svc: CourseAdmin = Depends(get_course_admin)):
+    return AdminCourseListOut(items=[_course(a) for a in await svc.all()])
+
+
+@router.post("/api/admin/courses", status_code=201, response_model=AdminCourseOut)
+async def draft_course(body: CourseDraftIn, _: str = Depends(require_admin),
+                       svc: CourseAdmin = Depends(get_course_admin)):  # fmt: skip
+    try:
+        return _course(await svc.draft_course(body.theme, body.ref, body.title))
+    except NotFound:
+        raise HTTPException(404, "작품이나 인물을 찾을 수 없습니다") from None
+    except InvalidInput as e:
+        raise AppError("ERR-001", f"입력 값을 확인해 주세요({e})") from None
+
+
+@router.patch("/api/admin/courses", response_model=AdminCourseOut)
+async def edit_course(body: CourseEditIn, by: str = Depends(require_admin),
+                      svc: CourseAdmin = Depends(get_course_admin)):  # fmt: skip
+    try:
+        return _course(await svc.update_course(body.id, by, body.stops, body.title, body.status))
+    except NotFound:
+        raise HTTPException(404, "코스를 찾을 수 없습니다") from None
+    except InvalidInput as e:
+        raise AppError("ERR-001", f"입력 값을 확인해 주세요({e})") from None

@@ -60,3 +60,8 @@ def estimate(
     by_subway = a_station.walk_min + rail + b_station.walk_min
     walked_m = (a_station.walk_min + b_station.walk_min) * WALK_M_PER_MIN
     return Leg("subway", by_subway, walked_m) if by_subway < walk.minutes else walk
+
+
+def station_label(name: str) -> str:
+    """역 이름 표시. 원본에 '부산역'처럼 '역'이 붙은 이름이 있어 두 번 붙이지 않는다."""
+    return name if name.endswith("역") else f"{name}역"

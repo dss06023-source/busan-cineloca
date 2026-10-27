@@ -398,6 +398,25 @@ export interface paths {
         patch: operations["update_location_api_admin_locations__location_id__patch"];
         trace?: never;
     };
+    "/api/admin/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Courses */
+        get: operations["courses_api_admin_courses_get"];
+        put?: never;
+        /** Draft Course */
+        post: operations["draft_course_api_admin_courses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Course */
+        patch: operations["edit_course_api_admin_courses_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -431,6 +450,32 @@ export interface components {
             reason: ("budget" | "candidates") | null;
             options: components["schemas"]["OptionsOut"] | null;
         };
+        /** AdminCourseListOut */
+        AdminCourseListOut: {
+            /** Items */
+            items: components["schemas"]["AdminCourseOut"][];
+        };
+        /** AdminCourseOut */
+        AdminCourseOut: {
+            /** Id */
+            id: number;
+            /** Theme */
+            theme: string;
+            /** Theme Ref */
+            theme_ref: string | null;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Start Label */
+            start_label: string;
+            /** Total Min */
+            total_min: number;
+            /** Total M */
+            total_m: number;
+            /** Stops */
+            stops: components["schemas"]["AdminStopOut"][];
+        };
         /** AdminLocationOut */
         AdminLocationOut: {
             /** Id */
@@ -447,6 +492,21 @@ export interface components {
             cert_excluded: boolean;
             /** Tags */
             tags: string[];
+        };
+        /** AdminStopOut */
+        AdminStopOut: {
+            /** Ord */
+            ord: number;
+            /** Location Id */
+            location_id: number;
+            /** Name */
+            name: string | null;
+            /** Leg Mode */
+            leg_mode: string | null;
+            /** Leg Min */
+            leg_min: number | null;
+            /** Leg Line */
+            leg_line: string | null;
         };
         /** AskIn */
         AskIn: {
@@ -551,6 +611,29 @@ export interface components {
         CourseDetailOut: {
             course: components["schemas"]["CourseOut"];
             route: components["schemas"]["RouteOut"];
+        };
+        /** CourseDraftIn */
+        CourseDraftIn: {
+            /**
+             * Theme
+             * @enum {string}
+             */
+            theme: "work" | "actor" | "area";
+            /** Ref */
+            ref: string;
+            /** Title */
+            title?: string | null;
+        };
+        /** CourseEditIn */
+        CourseEditIn: {
+            /** Id */
+            id: number;
+            /** Stops */
+            stops?: number[] | null;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: ("draft" | "approved") | null;
         };
         /** CourseIntroOut */
         CourseIntroOut: {
@@ -2141,6 +2224,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminLocationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    courses_api_admin_courses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCourseListOut"];
+                };
+            };
+        };
+    };
+    draft_course_api_admin_courses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCourseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_course_api_admin_courses_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCourseOut"];
                 };
             };
             /** @description Validation Error */

@@ -47,3 +47,4 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | API-022 | {id, action, edit} | 제안 형식을 태그 {tags[]}, 매칭 {kmdb_id, …}로 정함. edit는 제안 위에 덮어씀. 승인 시 태그는 촬영지 tags에 합치고, 매칭은 work.kmdb_id와 match_status='reviewed'. 목록은 pending만, 대상 이름(target_label)을 함께 | WP-07 |
 | stg 스키마 | public과 같은 구조 | stg.work·location·shooting만, 관계는 id 대신 ext_key로 잇고 관리자 값(tags·caution·cert_*) 열은 두지 않음. photo·work_person·임베딩은 해당 수집 단계(WP-05)와 함께 추가. 검수로 연결한 작품(match_status='reviewed')의 매칭 결과도 보존 | WP-07 |
 | 건수 가드 '직전' | prev_counts | 직전 sync_run 기록 대신 지금 서비스 중인(retired 아님) 건수로 비교. 반영이 실패한 회차가 기준이 되지 않음 | WP-07 |
+| API-024 | AdminService.draft_course·approve_course, POST·PATCH | services/admin/courses.py의 CourseAdmin으로 나눔. GET /api/admin/courses(초안·승인 전체)를 더함. PATCH {id, stops?, title?, status?}에서 장소를 바꾸면 그 순서로 다시 계산하고 초안으로 돌림(다시 승인해야 공개). 후보는 테마에 맞는 촬영지 중 사유지를 빼고 작품 수 순 5곳 | WP-07 |
