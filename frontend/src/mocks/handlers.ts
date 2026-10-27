@@ -107,5 +107,19 @@ export const handlers = [
       cert_radius_m: b.cert_radius_m ?? 100, cert_excluded: b.cert_excluded ?? false, tags: ["역"],
     });
   }),
+  http.get("/api/admin/courses", () => HttpResponse.json({ items: data.adminCourses })),
+  http.post("/api/admin/courses", async ({ request }) => {
+    const b = (await request.json()) as { theme: string; ref: string; title?: string | null };
+    if (b.ref === "없는구") {
+      return HttpResponse.json({ error: { code: "ERR-001", message: "입력 값을 확인해 주세요(좌표가 있는 촬영지가 0곳뿐이라 코스를 만들 수 없습니다)" } }, { status: 422 });
+    }
+    return HttpResponse.json({ ...data.adminCourses[0], id: 10, theme: b.theme, theme_ref: b.ref, title: b.title || `${b.ref} 촬영지 산책` }, { status: 201 });
+  }),
+  http.patch("/api/admin/courses", async ({ request }) => {
+    const b = (await request.json()) as { id: number; stops?: number[] | null; status?: string | null };
+    const c = data.adminCourses.find((x) => x.id === b.id) ?? data.adminCourses[0];
+    const stops = b.stops ? b.stops.map((id, i) => ({ ...c.stops.find((s) => s.location_id === id)!, ord: i + 1 })) : c.stops;
+    return HttpResponse.json({ ...c, stops, status: b.stops ? "draft" : (b.status ?? c.status) });
+  }),
   http.delete("/api/query/session", () => new HttpResponse(null, { status: 204 })),
 ];

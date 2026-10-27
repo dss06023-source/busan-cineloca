@@ -1,5 +1,5 @@
 // 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
-import type { AICourseOut, ReviewItem, SyncReport, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
+import type { AdminCourse, AICourseOut, ReviewItem, SyncReport, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {
   id: "DEV-SEED",
@@ -200,4 +200,26 @@ export const syncReport: SyncReport = {
 export const reviews: ReviewItem[] = [
   { id: 11, kind: "tag", target_type: "location", target_id: 9, target_label: "부산역 광장", proposal: { tags: ["야경", "역"] }, proposer: "ai", model: "fake", score: null, status: "pending" },
   { id: 12, kind: "match", target_type: "work", target_id: 2, target_label: "남포동 블루스", proposal: { kmdb_id: "K99999", title: "남포동 블루스" }, proposer: "rule", model: null, score: 0.72, status: "pending" },
+];
+
+// 관리자 추천 코스(API-024) 목
+export const adminCourses: AdminCourse[] = [
+  {
+    id: 3, theme: "area", theme_ref: "해운대구", title: "해운대 바다 촬영지(검토 중)", status: "draft", start_label: "해운대역",
+    total_min: 98, total_m: 2513,
+    stops: [
+      { ord: 1, location_id: 1, name: "해운대해수욕장", leg_mode: "walk", leg_min: 9, leg_line: null },
+      { ord: 2, location_id: 2, name: "동백섬", leg_mode: "walk", leg_min: 12, leg_line: null },
+      { ord: 3, location_id: 3, name: "더베이101", leg_mode: "walk", leg_min: 17, leg_line: null },
+    ],
+  },
+  {
+    id: 1, theme: "work", theme_ref: "3", title: "「부산 추격전」 따라 걷기", status: "approved", start_label: "부산역",
+    total_min: 104, total_m: 15427,
+    stops: [
+      { ord: 1, location_id: 9, name: "부산역 광장", leg_mode: "walk", leg_min: 1, leg_line: null },
+      { ord: 2, location_id: 7, name: "광안리해수욕장", leg_mode: "subway", leg_min: 31, leg_line: "1호선→2호선" },
+      { ord: 3, location_id: 12, name: "자갈치시장", leg_mode: "subway", leg_min: 12, leg_line: "2호선→1호선" },
+    ],
+  },
 ];

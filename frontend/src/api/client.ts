@@ -37,6 +37,9 @@ export type SyncReport = Schemas["SyncReportOut"];
 export type ReviewItem = Schemas["ReviewOut"];
 export type LocationAttrsIn = Schemas["LocationAttrsIn"];
 export type AdminLocation = Schemas["AdminLocationOut"];
+export type AdminCourse = Schemas["AdminCourseOut"];
+export type CourseDraftIn = Schemas["CourseDraftIn"];
+export type CourseEditIn = Schemas["CourseEditIn"];
 export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
@@ -44,6 +47,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string | undefined,
     public retryAfter: number | null = null,
+    // 서버가 보낸 문구. 사용자 화면은 코드별 고정 문구만 쓰고, 관리자 화면만 이유를 보여 준다
+    public serverMessage: string | null = null,
   ) {
     super(messageFor(code));
   }
@@ -71,15 +76,17 @@ export async function api<T>(path: string, { method = "GET", body, ai = false, s
   if (res.ok) return (res.status === 204 ? undefined : await res.json()) as T;
   let code: string | undefined;
   let retryAfter: number | null = null;
+  let serverMessage: string | null = null;
   try {
     const err = (await res.json()).error;
     code = err?.code;
     retryAfter = err?.retry_after ?? null;
+    serverMessage = typeof err?.message === "string" ? err.message : null;
   } catch {
     code = res.status >= 500 ? "ERR-016" : undefined;
   }
   if (code === "ERR-002") window.dispatchEvent(new Event(NOTICE_REQUIRED_EVENT));
-  throw new ApiError(res.status, code, retryAfter);
+  throw new ApiError(res.status, code, retryAfter, serverMessage);
 }
 
 export const endpoints = {
@@ -116,6 +123,9 @@ export const endpoints = {
     api<ReviewItem>("/api/admin/reviews", { method: "PATCH", body }),
   updateLocation: (id: number, body: LocationAttrsIn) =>
     api<AdminLocation>(`/api/admin/locations/${id}`, { method: "PATCH", body }),
+  adminCourses: () => api<{ items: AdminCourse[] }>("/api/admin/courses"),
+  draftCourse: (body: CourseDraftIn) => api<AdminCourse>("/api/admin/courses", { method: "POST", body }),
+  editCourse: (body: CourseEditIn) => api<AdminCourse>("/api/admin/courses", { method: "PATCH", body }),
   intro: (id: number, spoiler: Spoiler) =>
     api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };
