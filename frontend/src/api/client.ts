@@ -13,6 +13,12 @@ export type LocationDetail = Schemas["LocationDetailOut"];
 export type Meta = Schemas["MetaOut"];
 export type SourceCard = Schemas["SourceCardOut"];
 export type SourcesOut = Schemas["SourcesOut"];
+export type WorkList = Schemas["WorkListOut"];
+export type WorkDetail = Schemas["WorkDetailOut"];
+export type Rating = Schemas["RatingOut"];
+export type Intro = Schemas["IntroOut"];
+export type Spoiler = "none" | "partial";
+export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -62,4 +68,13 @@ export const endpoints = {
   location: (id: number) => api<LocationDetail>(`/api/locations/${id}`),
   meta: () => api<Meta>("/api/meta"),
   sources: () => api<SourcesOut>("/api/sources"),
+  works: (p: WorkListParams) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return api<WorkList>(`/api/works?${qs}`);
+  },
+  work: (id: number) => api<WorkDetail>(`/api/works/${id}`),
+  rating: (id: number) => api<Rating>(`/api/works/${id}/rating`),
+  intro: (id: number, spoiler: Spoiler) =>
+    api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };

@@ -1,5 +1,5 @@
 // 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
-import type { LocationDetail, Meta, SearchOut, SourceCard, SourcesOut } from "../api/client";
+import type { Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {
   id: "DEV-SEED",
@@ -54,4 +54,58 @@ export const sources: SourcesOut = {
   sources: [{ ...dev, license: "개발용", policy: "STORE" }],
   licenses: [{ source_id: "DEV-SEED", license: "개발용", policy: "STORE" }],
   kobis_notice: "이 서비스는 영화진흥위원회 영화관입장권 통합전산망의 오픈 API를 이용합니다.",
+};
+
+export const works: WorkList = {
+  items: [
+    { id: 3, title: "부산 추격전", release_year: 2017, genres: ["범죄", "액션"], location_count: 3 },
+    { id: 9, title: "북항 작전", release_year: 2022, genres: ["액션", "스릴러"], location_count: 2 },
+    { id: 2, title: "남포동 블루스", release_year: 2001, genres: ["드라마", "범죄"], location_count: 2 },
+  ],
+  total: 3,
+  page: 1,
+};
+
+export const work: WorkDetail = {
+  work: works.items[0],
+  people: [{ id: 1, name: "강도윤", role: "actor" }],
+  plot: "형사 강도윤은 부산역에서 사라진 증인을 쫓아 도시 곳곳을 달린다.",
+  keywords: ["추격", "형사", "부산역"],
+  images: { posters: [], stills: [] },
+  vod: [],
+  kmdb_link: null,
+  locations: [
+    { id: 9, name: "부산역 광장", gu: "동구", lat: 35.1152, lon: 129.0422 },
+    { id: 11, name: "가상 골목", gu: "중구", lat: null, lon: null },
+  ],
+  related: [{ id: 9, title: "북항 작전", release_year: 2022 }],
+  source_ids: ["DEV-SEED"],
+  sources: [dev],
+};
+
+export const rating: Rating = { rating: null, source_ids: [], sources: [] };
+
+const gemini: SourceCard = { id: "DATA-11", org: "Google", name: "Gemini API(무료 티어)", base_date: null, url: "https://ai.google.dev" };
+
+export const introOk: Intro = {
+  status: "ok",
+  sentences: ["「부산 추격전」(2017)은 범죄 액션 영화입니다.", "동구의 부산역 광장에서 촬영했습니다."],
+  ai_generated: true,
+  degraded: false,
+  fallback: null,
+  dropped_count: 1,
+  source_ids: ["DEV-SEED", "DATA-11"],
+  sources: [dev, gemini],
+};
+
+// AI 장애 때의 강등 응답(FR-110, NFR-002)
+export const introDegraded: Intro = {
+  status: "degraded",
+  sentences: [],
+  ai_generated: false,
+  degraded: true,
+  fallback: { plot: work.plot, locations: work.locations.map(({ id, name, gu }) => ({ id, name, gu })) },
+  dropped_count: 0,
+  source_ids: ["DEV-SEED"],
+  sources: [dev],
 };
