@@ -73,7 +73,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <section className="page page-ask">
-      <div className="toolbar">
+      <div className="toolbar pane-head">
         <h1 className="grow">AI 탐색</h1>
         <button type="button" className="button" onClick={newChat}>
           새 대화
@@ -165,10 +165,19 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
         <ul className="list" aria-label="검색 결과">
           {out.items.map((i) => (
             <li key={i.id}>
-              <Link className="list-item" to={`/locations/${i.id}`}>
-                <strong>{i.name}</strong>
-                <span className="muted">
-                  {[i.gu, i.travel_min != null && `약 ${Math.round(i.travel_min)}분`, i.works.map((w) => w.title).join(", ")].filter(Boolean).join(" · ")}
+              <Link className="list-item tt-row" to={`/locations/${i.id}`}>
+                <span className="tt-num tt-lead" aria-label={i.travel_min != null ? `약 ${Math.round(i.travel_min)}분` : "이동 시간 없음"}>
+                  {i.travel_min != null ? (
+                    <>
+                      <span className="num">{Math.round(i.travel_min)}</span>분
+                    </>
+                  ) : (
+                    "–"
+                  )}
+                </span>
+                <span className="tt-main">
+                  <strong>{i.name}</strong>
+                  <span className="muted">{[i.gu, i.works.map((w) => w.title).join(", ")].filter(Boolean).join(" · ")}</span>
                 </span>
               </Link>
             </li>
