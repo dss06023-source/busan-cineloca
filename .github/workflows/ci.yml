@@ -63,6 +63,10 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    # gitleaks-action은 PR 이벤트에서 PR 커밋 목록을 API로 읽는다
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
