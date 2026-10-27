@@ -3,6 +3,7 @@ import { createBrowserRouter, Link, Navigate, RouterProvider, type RouteObject }
 import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
+import { NotFound, RouteError } from "./components/RouteError";
 import { Ask } from "./pages/Ask";
 import { AdminCourses } from "./pages/admin/AdminCourses";
 import { AdminLayout } from "./pages/admin/AdminLayout";
@@ -14,7 +15,6 @@ import { CourseDetail, SavedCourseDetail } from "./pages/CourseDetail";
 import { Courses } from "./pages/Courses";
 import { LocationDetail } from "./pages/LocationDetail";
 import { MapHome } from "./pages/MapHome";
-import { Placeholder } from "./pages/Placeholder";
 import { Sources } from "./pages/Sources";
 import { WorkDetail } from "./pages/WorkDetail";
 import { Works } from "./pages/Works";
@@ -36,6 +36,7 @@ export const routes: RouteObject[] = [
   {
     path: "/admin",
     element: <AdminLayout />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: <Navigate to="/admin/sync" replace /> },
       { path: "sync", element: <AdminSync /> },
@@ -46,17 +47,23 @@ export const routes: RouteObject[] = [
   {
     element: <Layout />,
     children: [
-      { path: "/", element: <MapHome /> },
-      { path: "/locations/:id", element: <LocationDetail /> },
-      { path: "/works", element: <Works /> },
-      { path: "/works/:id", element: <WorkDetail /> },
-      { path: "/ask", element: <Ask /> },
-      { path: "/courses", element: <Courses /> },
-      { path: "/courses/saved/:key", element: <SavedCourseDetail /> },
-      { path: "/courses/:id", element: <CourseDetail /> },
-      { path: "/me", element: <MePage /> },
-      { path: "/sources", element: <Sources /> },
-      { path: "*", element: <Placeholder title="페이지를 찾을 수 없습니다" wp="404" /> },
+      {
+        // 하단 탭은 남기고 화면 자리에만 오류 안내를 띄운다
+        errorElement: <RouteError />,
+        children: [
+          { path: "/", element: <MapHome /> },
+          { path: "/locations/:id", element: <LocationDetail /> },
+          { path: "/works", element: <Works /> },
+          { path: "/works/:id", element: <WorkDetail /> },
+          { path: "/ask", element: <Ask /> },
+          { path: "/courses", element: <Courses /> },
+          { path: "/courses/saved/:key", element: <SavedCourseDetail /> },
+          { path: "/courses/:id", element: <CourseDetail /> },
+          { path: "/me", element: <MePage /> },
+          { path: "/sources", element: <Sources /> },
+          { path: "*", element: <NotFound /> },
+        ],
+      },
     ],
   },
 ];
