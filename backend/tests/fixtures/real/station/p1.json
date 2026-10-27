@@ -1,0 +1,33 @@
+{
+ "header": {
+  "resultCode": "00",
+  "resultMsg": "NORMAL SERVICE."
+ },
+ "body": {
+  "items": {
+   "item": [
+    {
+     "scode": "100",
+     "sname": "동매",
+     "saddr": "부산광역시 사하구 신산로 지하168 (신평동)",
+     "stel": "051-678-6100"
+    },
+    {
+     "scode": "101",
+     "sname": "신평",
+     "saddr": "부산광역시 사하구 하신번영로 140",
+     "stel": "051-678-6101"
+    },
+    {
+     "scode": "102",
+     "sname": "하단",
+     "saddr": "부산광역시 사하구 낙동남로 지하 1415",
+     "stel": "051-678-6102"
+    }
+   ]
+  },
+  "numOfRows": 3,
+  "pageNo": 1,
+  "totalCount": 158
+ }
+}

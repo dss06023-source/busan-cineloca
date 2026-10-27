@@ -1,0 +1,32 @@
+{
+ "response": {
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  },
+  "body": {
+   "totalCount": "2193",
+   "items": {
+    "item": [
+     {
+      "opusNm": "넷플릭스 굿뉴스",
+      "plcNm": "중앙대로 180번길",
+      "roadNmAddr": "부산 동구 초량동 1206-1 동구 중앙대로 200(중앙대로 180번길)"
+     },
+     {
+      "opusNm": "넷플릭스 굿뉴스",
+      "plcNm": "부산박물관",
+      "roadNmAddr": "부산 남구 유엔평화로 63 (대연동, 부산박물관)"
+     },
+     {
+      "opusNm": "넷플릭스 굿뉴스",
+      "plcNm": "구) 충무시설",
+      "roadNmAddr": "부산 수영구 광안동 산 105-1"
+     }
+    ]
+   },
+   "pageNo": "1",
+   "numOfRows": "3"
+  }
+ }
+}
