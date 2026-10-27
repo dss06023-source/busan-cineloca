@@ -7,6 +7,8 @@ import { LocationDetail } from "./pages/LocationDetail";
 import { MapHome } from "./pages/MapHome";
 import { Placeholder } from "./pages/Placeholder";
 import { Sources } from "./pages/Sources";
+import { WorkDetail } from "./pages/WorkDetail";
+import { Works } from "./pages/Works";
 
 function MePage() {
   return (
@@ -24,8 +26,8 @@ export const routes: RouteObject[] = [
     children: [
       { path: "/", element: <MapHome /> },
       { path: "/locations/:id", element: <LocationDetail /> },
-      { path: "/works", element: <Placeholder title="작품" wp="WP-08" /> },
-      { path: "/works/:id", element: <Placeholder title="작품 상세" wp="WP-08" /> },
+      { path: "/works", element: <Works /> },
+      { path: "/works/:id", element: <WorkDetail /> },
       { path: "/ask", element: <Placeholder title="AI 탐색" wp="WP-09" /> },
       { path: "/courses", element: <Placeholder title="코스" wp="WP-10" /> },
       { path: "/me", element: <MePage /> },
