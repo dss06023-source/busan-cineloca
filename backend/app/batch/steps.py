@@ -1,6 +1,6 @@
-"""동기화 단계(IngestStep): 수집(CollectStep) → KMDb 매칭(MatchWorksStep).
+"""동기화 단계(IngestStep): 수집(CollectStep) → 주소 좌표(GeocodeStep) → KMDb 매칭(MatchWorksStep).
 
-좌표·역 단계는 주소 좌표 키가 승인되면 더한다.
+최근접 역 단계는 역 좌표 원본이 생기면 더한다.
 """
 
 import re
@@ -11,6 +11,8 @@ from typing import Protocol
 
 from app.batch.job import SyncContext
 from app.data.adapters.busan import FilmLocation
+from app.data.adapters.errors import AdapterError, QuotaExhausted
+from app.data.adapters.juso import GeoPoint
 from app.data.adapters.kmdb_csv import SOURCE_ID as KMDB_SOURCE
 from app.data.adapters.kmdb_csv import KmdbMovie, stored_kmdb
 from app.data.adapters.policy import PolicyGuard
@@ -130,3 +132,49 @@ class MatchWorksStep:
         # STORE일 때만 줄거리·키워드·링크를 싣는다(ID_ONLY면 kmdb_id만, TBD-01)
         m = self.catalog.by_id.get(kmdb_id) if kmdb_id else None
         return stored_kmdb(m) if m and self.policy.policies.get(KMDB_SOURCE) == "STORE" else None
+
+
+class Geocoder(Protocol):
+    async def geocode(self, address: str) -> GeoPoint | None: ...
+
+
+class GeocodeStep:
+    """주소가 있고 좌표가 없는 촬영지에 좌표를 채운다(DATA-06). 못 찾으면 geocode_status = failed로 두고
+    관리자가 보정한다. 지난 반영에서 같은 주소로 찾은 좌표가 있으면 다시 부르지 않는다(하루 호출 한도).
+    하루 한도에 닿으면 나머지는 failed로 두고 다음 동기화에 맡긴다."""
+
+    name = "geocode"
+
+    def __init__(self, geocoder: Geocoder,
+                 known: Callable[[], Awaitable[dict[str, tuple[str, float, float]]]] | None = None):  # fmt: skip
+        self.geocoder, self.known = geocoder, known
+
+    async def run(self, ctx: SyncContext) -> None:
+        known = await self.known() if self.known else {}
+        errors: dict[str, int] = {}
+        stopped = False
+        out = []
+        for loc in ctx.locations:
+            if loc.lat is not None or not loc.address:
+                out.append(loc)
+                continue
+            prev = known.get(loc.ext_key)
+            if prev and prev[0] == loc.address:
+                out.append(replace(loc, lat=prev[1], lon=prev[2], geocode_status="ok"))
+                continue
+            point = None
+            if not stopped:
+                try:
+                    point = await self.geocoder.geocode(loc.address)
+                except QuotaExhausted:
+                    stopped = True
+                    errors["QuotaExhausted"] = errors.get("QuotaExhausted", 0) + 1
+                except AdapterError as e:  # 한 곳이 실패해도 나머지는 계속한다
+                    errors[type(e).__name__] = errors.get(type(e).__name__, 0) + 1
+            if point is None:
+                out.append(replace(loc, geocode_status="failed"))
+            else:
+                out.append(replace(loc, lat=point.lat, lon=point.lon, geocode_status="ok", gu=loc.gu or point.gu))
+        ctx.locations = out
+        # 주소는 남기지 않고 오류 종류별 건수만 남긴다
+        ctx.failures += [{"step": self.name, "error": k, "count": n} for k, n in sorted(errors.items())]

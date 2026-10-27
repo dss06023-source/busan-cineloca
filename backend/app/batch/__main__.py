@@ -11,14 +11,16 @@ import sys
 from psycopg_pool import AsyncConnectionPool
 
 from app.batch.job import IngestStep, SyncJob
-from app.batch.steps import CollectStep, MatchWorksStep
+from app.batch.steps import CollectStep, GeocodeStep, MatchWorksStep
 from app.config import Settings, get_settings
 from app.data.adapters.busan import CineMapClient, FilmLocationClient
 from app.data.adapters.config import load_adapters
 from app.data.adapters.http import new_http_client
+from app.data.adapters.juso import JusoCoordClient, JusoGeocoder, JusoSearchClient
 from app.data.adapters.kmdb_csv import KmdbCsvCatalog
 from app.data.adapters.policy import PolicyGuard
 from app.data.db import make_pool
+from app.data.repositories.location import LocationRepository
 from app.data.repositories.source import SourceRepository
 from app.data.repositories.staging import StagingRepository
 from app.data.repositories.sync import SyncRepository
@@ -37,6 +39,13 @@ async def build_steps(settings: Settings, pool: AsyncConnectionPool, http) -> li
         sources = [cls(http, settings.data_go_kr_key, conf[cls.name], usage=usage)
                    for cls in (FilmLocationClient, CineMapClient)]  # fmt: skip
         steps.append(CollectStep(sources))
+    if settings.juso_key and settings.juso_coord_key:  # 두 키가 다 있어야 좌표를 찾는다
+        conf, usage = load_adapters(), UsageRepository(pool)
+        geocoder = JusoGeocoder(
+            JusoSearchClient(http, settings.juso_key, conf["juso_search"], usage=usage),
+            JusoCoordClient(http, settings.juso_coord_key, conf["juso_coord"], usage=usage),
+        )
+        steps.append(GeocodeStep(geocoder, LocationRepository(pool).geocoded))
     if settings.kmdb_csv_path:  # KMDb 키 승인 전에는 CSV로 매칭한다(로드 약 8초)
         policy = PolicyGuard.from_sources(await SourceRepository(pool).all())
         catalog = KmdbCsvCatalog.load(settings.kmdb_csv_path)
