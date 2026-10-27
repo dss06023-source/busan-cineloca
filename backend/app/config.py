@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ai_rate_per_min: int = 5
     # 스탬프·배지 토큰 서명 키 "kid:비밀,kid:비밀"(앞의 것으로 서명). 비우면 실행할 때마다 임시 키(개발용)
     token_keys: str = ""
+    # 관리자 비밀번호 argon2 해시(FR-615). 비우면 관리자 로그인이 언제나 실패한다
+    admin_password_hash: str = ""
 
 
 @lru_cache

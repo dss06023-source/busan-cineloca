@@ -107,6 +107,15 @@ class WorkRepository:
                 result[r["location_id"]].append(build(WorkBrief, r))
         return result
 
+    async def set_match(self, work_id: int, kmdb_id: str) -> bool:
+        """검수에서 승인한 KMDb 연결(BR-11). 다른 작품이 쓰는 kmdb_id면 UniqueViolation."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "UPDATE work SET kmdb_id = %(k)s, match_status = 'reviewed' WHERE id = %(id)s RETURNING id",
+                {"id": work_id, "k": kmdb_id},
+            )
+            return await cur.fetchone() is not None
+
     async def genres(self) -> list[str]:
         async with self.pool.connection() as conn:
             cur = await conn.execute("SELECT DISTINCT unnest(genres) AS g FROM work WHERE NOT retired ORDER BY g")

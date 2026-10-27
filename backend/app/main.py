@@ -7,21 +7,25 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 
+from app.api.admin_auth import AdminAuth
 from app.api.assembler import Assembler
 from app.api.errors import install_error_handlers
 from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
-from app.api.routers import courses, health, locations, query, sources, stamps, works
+from app.api.routers import admin, courses, health, locations, query, sources, stamps, works
 from app.config import Settings, get_settings
 from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
 from app.data.repositories.course import CourseRepository
 from app.data.repositories.dictionary import DictionaryRepository
 from app.data.repositories.location import LocationRepository
+from app.data.repositories.review import ReviewRepository
 from app.data.repositories.source import SourceRepository
 from app.data.repositories.station import StationRepository
+from app.data.repositories.sync import SyncRepository
 from app.data.repositories.work import WorkRepository
 from app.pipeline.query import steps as qs
+from app.services.admin.service import AdminService
 from app.services.archive.service import ArchiveService
 from app.services.course.service import CourseService
 from app.services.map.service import DISTRICTS, MapService
@@ -63,6 +67,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         LexiconCache(dictionary.lexicon), phrases, app.state.embedder,
     )  # fmt: skip
     app.state.stamp_service = StampService(locs, work_repo, CourseRepository(pool), _signer(settings))
+    app.state.admin_auth = AdminAuth(settings.admin_password_hash)
+    app.state.admin_service = AdminService(ReviewRepository(pool), locs, work_repo, SyncRepository(pool))
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
 
@@ -78,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(courses.router)
     app.include_router(stamps.router)
     app.include_router(sources.router)
+    app.include_router(admin.router)
     return app
 
 
