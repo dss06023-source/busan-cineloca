@@ -307,6 +307,7 @@ export interface components {
             notices: string[];
             /** Reason */
             reason: ("budget" | "candidates") | null;
+            options: components["schemas"]["OptionsOut"] | null;
         };
         /** AskIn */
         AskIn: {
@@ -645,6 +646,15 @@ export interface components {
             ] | null;
             /** Default Station Id */
             default_station_id: string;
+        };
+        /** OptionsOut */
+        OptionsOut: {
+            /** Genres */
+            genres: string[];
+            /** Mood Tags */
+            mood_tags: string[];
+            /** Districts */
+            districts: string[];
         };
         /** PersonOut */
         PersonOut: {

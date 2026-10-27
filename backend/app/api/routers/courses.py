@@ -152,6 +152,12 @@ class CourseIntroOut(BaseModel):
     dropped_count: int
 
 
+class OptionsOut(BaseModel):
+    genres: list[str]
+    mood_tags: list[str]
+    districts: list[str]
+
+
 class AICourseOut(BaseModel):
     status: Literal["OK", "FALLBACK", "OUT_OF_SCOPE", "INFEASIBLE"]
     preference: PreferenceOut | None
@@ -161,6 +167,7 @@ class AICourseOut(BaseModel):
     masked: bool
     notices: list[str]
     reason: Literal["budget", "candidates"] | None
+    options: OptionsOut | None
 
 
 def _course(c, stops: int) -> CourseOut:
@@ -250,4 +257,5 @@ async def ai_course(
         masked=r.masked,
         notices=r.notices,
         reason=r.reason,
+        options=OptionsOut(**r.options) if r.options else None,
     )

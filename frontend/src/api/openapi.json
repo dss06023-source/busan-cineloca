@@ -793,6 +793,16 @@
               }
             ],
             "title": "Reason"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -804,7 +814,8 @@
           "intro",
           "masked",
           "notices",
-          "reason"
+          "reason",
+          "options"
         ],
         "title": "AICourseOut"
       },
@@ -2018,6 +2029,38 @@
           "default_station_id"
         ],
         "title": "MetaOut"
+      },
+      "OptionsOut": {
+        "properties": {
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres"
+          },
+          "mood_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Mood Tags"
+          },
+          "districts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Districts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "genres",
+          "mood_tags",
+          "districts"
+        ],
+        "title": "OptionsOut"
       },
       "PersonOut": {
         "properties": {

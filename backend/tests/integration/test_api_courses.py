@@ -131,6 +131,7 @@ async def test_ai_failure_falls_back_to_manual(app, client, mode):
     fake(app, mode=mode)
     r = (await client.post("/api/courses/ai", json={"preference": "바다"}, headers=H)).json()
     assert r["status"] == "FALLBACK" and r["route"] is None
+    assert "바다" in r["options"]["mood_tags"] and "중구" in r["options"]["districts"]
     manual = {"manual": {"mood_tags": ["바다"]}, "start": {"station_id": "111"}, "budget_h": 4}
     r = (await client.post("/api/courses/ai", json=manual, headers=H)).json()
     assert r["status"] == "OK" and r["intro"]["ai_generated"] is False  # 소개도 장애 → 템플릿(FR-312)

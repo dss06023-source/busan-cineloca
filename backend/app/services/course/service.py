@@ -77,6 +77,7 @@ class AICourse:
     notices: list[str] = field(default_factory=list)
     reason: str | None = None
     budget_h: float | None = None
+    options: dict | None = None  # FALLBACK일 때 직접 고를 값(FR-312)
 
 
 def candidate_of(c) -> Candidate:
@@ -243,7 +244,7 @@ class CourseService:
                 )
             except AIUnavailable as e:
                 log.info("structure_preference unavailable", extra={"reasons": e.reasons})
-                return AICourse("FALLBACK", masked=bool(kinds))  # 조건 직접 선택 화면(FR-312)
+                return AICourse("FALLBACK", masked=bool(kinds), options=allowed)  # 조건 직접 선택 화면(FR-312)
             raw = result.data
             if raw.get("out_of_scope"):
                 return AICourse("OUT_OF_SCOPE", masked=bool(kinds))
