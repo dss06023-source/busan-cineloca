@@ -1,5 +1,6 @@
-// API-001~007·019 목. AI 탐색 목은 WP-09에서 더한다.
+// API-001~007·013~015·019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
 import { http, HttpResponse } from "msw";
+import type { QueryOut } from "../api/client";
 import * as data from "./data";
 
 export const handlers = [
@@ -23,4 +24,15 @@ export const handlers = [
     const body = (await request.json()) as { spoiler: string };
     return HttpResponse.json(body.spoiler === "partial" ? data.introDegraded : data.introOk);
   }),
+  http.post("/api/query", async ({ request }) => {
+    const body = (await request.json()) as { text: string };
+    return HttpResponse.json(body.text.includes("장애") ? data.queryFallback : data.queryScene3);
+  }),
+  // 필터 패널·칩 삭제: 보낸 조건을 그대로 돌려주고 결과는 장면 3 목록
+  http.post("/api/search", async ({ request }) => {
+    const body = (await request.json()) as { criteria: QueryOut["criteria"] };
+    const chips = data.queryScene3.chips.filter((c) => (c.field === "travel" ? body.criteria?.base_kind : body.criteria?.person_ids));
+    return HttpResponse.json({ ...data.queryScene3, summary: null, chips, criteria: body.criteria });
+  }),
+  http.delete("/api/query/session", () => new HttpResponse(null, { status: 204 })),
 ];

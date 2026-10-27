@@ -18,6 +18,9 @@ export type WorkDetail = Schemas["WorkDetailOut"];
 export type Rating = Schemas["RatingOut"];
 export type Intro = Schemas["IntroOut"];
 export type Spoiler = "none" | "partial";
+export type QueryOut = Schemas["QueryOut"];
+export type Criteria = Schemas["CriteriaIO"];
+export type Chip = Schemas["ChipOut"];
 export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
@@ -75,6 +78,11 @@ export const endpoints = {
   },
   work: (id: number) => api<WorkDetail>(`/api/works/${id}`),
   rating: (id: number) => api<Rating>(`/api/works/${id}/rating`),
+  ask: (text: string, here?: { lat: number; lon: number } | null) =>
+    api<QueryOut>("/api/query", { method: "POST", body: { text, here: here ?? null }, ai: true }),
+  search: (criteria: Criteria, labels: Record<string, string> = {}) =>
+    api<QueryOut>("/api/search", { method: "POST", body: { criteria, labels } }),
+  resetQuery: () => api<void>("/api/query/session", { method: "DELETE" }),
   intro: (id: number, spoiler: Spoiler) =>
     api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };
