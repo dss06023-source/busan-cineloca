@@ -259,6 +259,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stamps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Certify */
+        post: operations["certify_api_stamps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stamps/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify */
+        post: operations["verify_api_stamps_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/badges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Badge */
+        post: operations["badge_api_badges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -316,6 +367,33 @@ export interface components {
             here?: components["schemas"]["PointIO"] | null;
         };
         /**
+         * BadgeCourseIn
+         * @description 추천 코스는 {id}, 브라우저에 저장한 코스는 {location_ids}(SD-04).
+         */
+        BadgeCourseIn: {
+            /** Id */
+            id?: number | null;
+            /** Location Ids */
+            location_ids?: number[] | null;
+        };
+        /** BadgeIn */
+        BadgeIn: {
+            course: components["schemas"]["BadgeCourseIn"];
+            /** Stamps */
+            stamps: string[];
+        };
+        /** BadgeOut */
+        BadgeOut: {
+            /** Ok */
+            ok: boolean;
+            /** Token */
+            token: string | null;
+            /** Course Key */
+            course_key: string;
+            /** Missing */
+            missing: number[];
+        };
+        /**
          * BaseIn
          * @description 기준 위치: 좌표, 역, 구·군 중 하나. 좌표는 요청 본문으로만 받고 저장·기록하지 않는다(NFR-003).
          */
@@ -328,6 +406,30 @@ export interface components {
             station_id?: string | null;
             /** Gu */
             gu?: string | null;
+        };
+        /** CertifyIn */
+        CertifyIn: {
+            /** Location Id */
+            location_id: number;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Accuracy M */
+            accuracy_m: number;
+            /** Held */
+            held?: string[];
+        };
+        /** CertifyOut */
+        CertifyOut: {
+            /** Ok */
+            ok: boolean;
+            /** Token */
+            token: string | null;
+            /** Reason */
+            reason: ("accuracy" | "distance" | "duplicate") | null;
+            /** Distance M */
+            distance_m: number;
         };
         /** ChipOut */
         ChipOut: {
@@ -861,6 +963,22 @@ export interface components {
             /** Kobis Notice */
             kobis_notice: string;
         };
+        /** StampLocationOut */
+        StampLocationOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Gu */
+            gu: string | null;
+        };
+        /** StampOut */
+        StampOut: {
+            location: components["schemas"]["StampLocationOut"];
+            work: components["schemas"]["WorkBriefOut"] | null;
+            /** Iat */
+            iat: number;
+        };
         /**
          * StartIn
          * @description 출발지: 도시철도역, 촬영지, 현재 위치 중 하나(FR-303). 좌표는 저장·기록하지 않는다.
@@ -939,6 +1057,18 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerifyIn */
+        VerifyIn: {
+            /** Tokens */
+            tokens: string[];
+        };
+        /** VerifyOut */
+        VerifyOut: {
+            /** Valid */
+            valid: components["schemas"]["StampOut"][];
+            /** Invalid Count */
+            invalid_count: number;
         };
         /** VodOut */
         VodOut: {
@@ -1479,6 +1609,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AICourseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    certify_api_stamps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertifyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_api_stamps_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    badge_api_badges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BadgeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadgeOut"];
                 };
             };
             /** @description Validation Error */

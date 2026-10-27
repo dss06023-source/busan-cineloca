@@ -34,3 +34,11 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | 추천 코스 상세 | course_stop의 leg_* 저장값 표시 | API-010이 저장된 순서로 구간을 매번 다시 계산(역간 시간이 바뀌어도 맞음). leg_* 열은 쓰지 않음 | WP-10 |
 | API-012 입력·응답 | {preference 또는 manual, start, budget_h} → {status, preference, route, reasons, intro, masked} | status에 FALLBACK·OUT_OF_SCOPE·INFEASIBLE, reason(budget·candidates), notices를 더함. start·budget_h는 선택이며 주면 문장보다 우선(FR-308), 없으면 문장의 출발지, 그것도 없으면 부산역 | WP-10 |
 | 구간 거리 | 정의 없음 | 직선거리 × 1.3(도시철도 구간 포함). total_m은 그 합 | WP-10 |
+| 토큰 서명 | JWT(HS256) | PyJWT 없이 표준 라이브러리(hmac·hashlib)로 만듦. 헤더는 {alg: HS256, typ: JWT}만, 클레임은 정해진 키만 받아 alg 바꿔치기·클레임 추가를 막음 | WP-11 |
+| TOKEN_KEYS | 정의 없음 | "kid:비밀,kid:비밀"(비밀 32바이트 이상). 앞의 키로 서명하고 뒤의 키는 확인만(키 교체). 비우면 실행마다 개발용 임시 키 | WP-11 |
+| API-016 응답 | {ok, token 또는 reason, distance_m} | reason 값은 accuracy·distance·duplicate. 이미 가진 장소면 duplicate(FR-505) | WP-11 |
+| API-016 409 | 409와 제외 이유 | ERR-009 오류의 detail에 [{reason: no_coords·excluded·private 등}] | WP-11 |
+| 지오펜스 비교 | 거리 ≤ 반경 | 거리를 0.1m 단위로 반올림해 비교(정확히 반경인 점이 부동소수 오차로 떨어지지 않게) | WP-11 |
+| API-017 응답 | {valid[{location, work, iat}], invalid_count} | work는 그 촬영지의 최신작 1편. 지워진 촬영지의 토큰도 invalid_count로 셈 | WP-11 |
+| API-018 응답 | {ok, token 또는 missing[]} | course_key를 더함. 추천 코스 "course:<id>", 저장 코스 "custom:"+장소 집합 sha256 앞 16자 | WP-11 |
+| 인증 제외 규칙 위치 | MapService | pipeline/certify.py로 옮김. services 모듈끼리 import할 수 없는데 map·stamp가 같은 규칙을 씀 | WP-11 |

@@ -7,6 +7,7 @@ from app.data.models import Conditions, Location, LocationHit, Photo, Point, Sta
 from app.data.repositories.location import LocationRepository
 from app.data.repositories.station import StationRepository
 from app.data.repositories.work import WorkRepository
+from app.pipeline.certify import cert_block_reason
 
 RADII_M = (500, 1000, 3000)  # FR-203
 CARD_WORKS = 3  # FR-206
@@ -20,7 +21,6 @@ BUSAN_BOUNDS = (34.85, 35.45, 128.75, 129.35)
 DEFAULT_STATION = "113"  # 부산역(FR-201)
 COORD_SOURCE = "DATA-06"
 STATION_SOURCE = "DATA-08"
-CERT_BLOCKING_CAUTIONS = {"private", "residential", "school"}  # BR-06
 
 
 class NotFound(Exception):
@@ -79,17 +79,6 @@ class LocationDetail:
 def in_busan(p: Point) -> bool:
     lat_lo, lat_hi, lon_lo, lon_hi = BUSAN_BOUNDS
     return lat_lo <= p.lat <= lat_hi and lon_lo <= p.lon <= lon_hi
-
-
-def cert_block_reason(loc: Location) -> str | None:
-    """인증 제외 이유(BR-06, FR-506). None이면 인증 가능."""
-    if loc.lat is None:
-        return "no_coords"
-    if loc.cert_excluded:
-        return "excluded"
-    if loc.caution in CERT_BLOCKING_CAUTIONS:
-        return loc.caution
-    return None
 
 
 class MapService:

@@ -643,6 +643,129 @@
         }
       }
     },
+    "/api/stamps": {
+      "post": {
+        "tags": [
+          "방문 인증"
+        ],
+        "summary": "Certify",
+        "operationId": "certify_api_stamps_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertifyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stamps/verify": {
+      "post": {
+        "tags": [
+          "방문 인증"
+        ],
+        "summary": "Verify",
+        "operationId": "verify_api_stamps_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/badges": {
+      "post": {
+        "tags": [
+          "방문 인증"
+        ],
+        "summary": "Badge",
+        "operationId": "badge_api_badges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BadgeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadgeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources": {
       "get": {
         "tags": [
@@ -844,6 +967,99 @@
         ],
         "title": "AskIn"
       },
+      "BadgeCourseIn": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "location_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Ids"
+          }
+        },
+        "type": "object",
+        "title": "BadgeCourseIn",
+        "description": "추천 코스는 {id}, 브라우저에 저장한 코스는 {location_ids}(SD-04)."
+      },
+      "BadgeIn": {
+        "properties": {
+          "course": {
+            "$ref": "#/components/schemas/BadgeCourseIn"
+          },
+          "stamps": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Stamps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "course",
+          "stamps"
+        ],
+        "title": "BadgeIn"
+      },
+      "BadgeOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "course_key": {
+            "type": "string",
+            "title": "Course Key"
+          },
+          "missing": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "token",
+          "course_key",
+          "missing"
+        ],
+        "title": "BadgeOut"
+      },
       "BaseIn": {
         "properties": {
           "lat": {
@@ -900,6 +1116,95 @@
         "type": "object",
         "title": "BaseIn",
         "description": "기준 위치: 좌표, 역, 구·군 중 하나. 좌표는 요청 본문으로만 받고 저장·기록하지 않는다(NFR-003)."
+      },
+      "CertifyIn": {
+        "properties": {
+          "location_id": {
+            "type": "integer",
+            "title": "Location Id"
+          },
+          "lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon"
+          },
+          "accuracy_m": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Accuracy M"
+          },
+          "held": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Held"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_id",
+          "lat",
+          "lon",
+          "accuracy_m"
+        ],
+        "title": "CertifyIn"
+      },
+      "CertifyOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "accuracy",
+                  "distance",
+                  "duplicate"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "distance_m": {
+            "type": "integer",
+            "title": "Distance M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "token",
+          "reason",
+          "distance_m"
+        ],
+        "title": "CertifyOut"
       },
       "ChipOut": {
         "properties": {
@@ -2682,6 +2987,64 @@
         ],
         "title": "SourcesOut"
       },
+      "StampLocationOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "gu"
+        ],
+        "title": "StampLocationOut"
+      },
+      "StampOut": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/StampLocationOut"
+          },
+          "work": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkBriefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "iat": {
+            "type": "integer",
+            "title": "Iat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location",
+          "work",
+          "iat"
+        ],
+        "title": "StampOut"
+      },
       "StartIn": {
         "properties": {
           "station_id": {
@@ -2922,6 +3285,45 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerifyIn": {
+        "properties": {
+          "tokens": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tokens"
+        ],
+        "title": "VerifyIn"
+      },
+      "VerifyOut": {
+        "properties": {
+          "valid": {
+            "items": {
+              "$ref": "#/components/schemas/StampOut"
+            },
+            "type": "array",
+            "title": "Valid"
+          },
+          "invalid_count": {
+            "type": "integer",
+            "title": "Invalid Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "invalid_count"
+        ],
+        "title": "VerifyOut"
       },
       "VodOut": {
         "properties": {
