@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # 외부 데이터 키(WP-05). 비우면 그 어댑터를 쓰지 않는다(KOBIS가 없으면 등급은 null)
     kobis_key: str = ""
     kmdb_key: str = ""
+    # KMDb 키 승인 전 대체: 오픈자료 '영화기본정보' CSV 경로(저장소에 넣지 않음)
+    kmdb_csv_path: str = ""
     data_go_kr_key: str = ""
     juso_key: str = ""
     tour_api_key: str = ""
