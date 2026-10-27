@@ -25,6 +25,7 @@ from app.data.repositories.station import StationRepository
 from app.data.repositories.sync import SyncRepository
 from app.data.repositories.work import WorkRepository
 from app.pipeline.query import steps as qs
+from app.services.admin.courses import CourseAdmin
 from app.services.admin.service import AdminService
 from app.services.archive.service import ArchiveService
 from app.services.course.service import CourseService
@@ -69,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.stamp_service = StampService(locs, work_repo, CourseRepository(pool), _signer(settings))
     app.state.admin_auth = AdminAuth(settings.admin_password_hash)
     app.state.admin_service = AdminService(ReviewRepository(pool), locs, work_repo, SyncRepository(pool))
+    app.state.course_admin = CourseAdmin(CourseRepository(pool), locs, stations, work_repo)
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
 

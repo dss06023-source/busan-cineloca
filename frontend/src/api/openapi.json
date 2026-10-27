@@ -1046,6 +1046,105 @@
           }
         }
       }
+    },
+    "/api/admin/courses": {
+      "get": {
+        "tags": [
+          "관리자"
+        ],
+        "summary": "Courses",
+        "operationId": "courses_api_admin_courses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCourseListOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "관리자"
+        ],
+        "summary": "Draft Course",
+        "operationId": "draft_course_api_admin_courses_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseDraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCourseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "관리자"
+        ],
+        "summary": "Edit Course",
+        "operationId": "edit_course_api_admin_courses_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseEditIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCourseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1202,6 +1301,85 @@
         ],
         "title": "AICourseOut"
       },
+      "AdminCourseListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminCourseOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "AdminCourseListOut"
+      },
+      "AdminCourseOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "theme_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "start_label": {
+            "type": "string",
+            "title": "Start Label"
+          },
+          "total_min": {
+            "type": "integer",
+            "title": "Total Min"
+          },
+          "total_m": {
+            "type": "integer",
+            "title": "Total M"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/AdminStopOut"
+            },
+            "type": "array",
+            "title": "Stops"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "theme",
+          "theme_ref",
+          "title",
+          "status",
+          "start_label",
+          "total_min",
+          "total_m",
+          "stops"
+        ],
+        "title": "AdminCourseOut"
+      },
       "AdminLocationOut": {
         "properties": {
           "id": {
@@ -1254,6 +1432,72 @@
           "tags"
         ],
         "title": "AdminLocationOut"
+      },
+      "AdminStopOut": {
+        "properties": {
+          "ord": {
+            "type": "integer",
+            "title": "Ord"
+          },
+          "location_id": {
+            "type": "integer",
+            "title": "Location Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "leg_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leg Mode"
+          },
+          "leg_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leg Min"
+          },
+          "leg_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leg Line"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ord",
+          "location_id",
+          "name",
+          "leg_mode",
+          "leg_min",
+          "leg_line"
+        ],
+        "title": "AdminStopOut"
       },
       "AskIn": {
         "properties": {
@@ -1606,6 +1850,97 @@
           "route"
         ],
         "title": "CourseDetailOut"
+      },
+      "CourseDraftIn": {
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "work",
+              "actor",
+              "area"
+            ],
+            "title": "Theme"
+          },
+          "ref": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "theme",
+          "ref"
+        ],
+        "title": "CourseDraftIn"
+      },
+      "CourseEditIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "stops": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stops"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "approved"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "CourseEditIn"
       },
       "CourseIntroOut": {
         "properties": {

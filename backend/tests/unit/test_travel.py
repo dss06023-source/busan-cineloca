@@ -1,7 +1,7 @@
 import pytest
 
 from app.data.models import Location, Point
-from app.pipeline.travel import StationLink, estimate, haversine_m, walk_minutes
+from app.pipeline.travel import StationLink, estimate, haversine_m, station_label, walk_minutes
 from app.services.map.service import cert_block_reason, in_busan
 
 # 위도 0.001도 ≈ 111.2m
@@ -65,3 +65,8 @@ def test_cert_block_reason(kw, reason):
 def test_in_busan():
     assert in_busan(Point(35.1152, 129.0422))
     assert not in_busan(Point(37.5665, 126.9780))  # 서울
+
+
+def test_station_label_adds_suffix_once():
+    assert station_label("남포") == "남포역"
+    assert station_label("부산역") == "부산역"
