@@ -1,6 +1,6 @@
 -- T2_NEAR_POINT: 기준점(현재 위치·장소·특정 역)에서 반경 안. 도보 N분이면 radius_m = N × 4000/60 ÷ 1.3
 WITH {matched}
-SELECT l.id, l.name, l.gu, l.lat, l.lon,
+SELECT l.id, l.name, l.gu, l.lat, l.lon, l.nearest_station_id,
        array_agg(DISTINCT m.work_id)   AS work_ids,
        array_agg(DISTINCT m.source_id) AS source_ids,
        earth_distance(ll_to_earth(%(lat)s, %(lon)s), ll_to_earth(l.lat, l.lon))::real AS dist_m,

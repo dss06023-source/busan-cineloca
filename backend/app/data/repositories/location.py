@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from psycopg_pool import AsyncConnectionPool
 
-from app.data.models import Conditions, Location, LocationAttrs, LocationHit, Point, WorkHit
+from app.data.models import Conditions, Location, LocationAttrs, LocationHit, Photo, Point, WorkHit
 from app.data.repositories import templates
 from app.data.repositories._rows import build
 
@@ -56,3 +56,17 @@ class LocationRepository:
             {"id": location_id, **attrs.__dict__},
         )
         return build(Location, rows[0]) if rows else None
+
+    async def photo(self, location_id: int) -> Photo | None:
+        """장소 사진 한 장(공공누리 제1유형만 저장됨, BR-03)."""
+        rows = await self._run(
+            "SELECT url, title, source_id FROM photo WHERE location_id = %(id)s ORDER BY id LIMIT 1",
+            {"id": location_id},
+        )
+        return build(Photo, rows[0]) if rows else None
+
+    async def shooting_sources(self, location_id: int) -> list[str]:
+        rows = await self._run(
+            "SELECT DISTINCT source_id FROM shooting WHERE location_id = %(id)s ORDER BY source_id", {"id": location_id}
+        )
+        return [r["source_id"] for r in rows]
