@@ -16,3 +16,21 @@ adapters:
     timeout_s: 10.0
     page_size: 100
     daily_limit: 1000   # 개발계정 서비스별 하루 1,000건(확인 필요)
+  bfc_movie:
+    source_id: DATA-01
+    base_url: https://apis.data.go.kr/6260000/BfcMovieBusanService
+    timeout_s: 15.0
+    page_size: 1000
+    daily_limit: 10000  # 개발계정 하루 10,000건(확인 필요)
+  cinemap:
+    source_id: DATA-02
+    base_url: https://apis.data.go.kr/6260000/CineMapService
+    timeout_s: 15.0
+    page_size: 1000
+    daily_limit: 10000  # 〃
+  station:
+    source_id: DATA-08
+    base_url: https://apis.data.go.kr/B551542/stationInfo
+    timeout_s: 15.0
+    page_size: 500
+    daily_limit: 10000  # 〃
