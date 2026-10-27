@@ -3,6 +3,7 @@ import { createBrowserRouter, Link, RouterProvider, type RouteObject } from "rea
 import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
+import { Ask } from "./pages/Ask";
 import { LocationDetail } from "./pages/LocationDetail";
 import { MapHome } from "./pages/MapHome";
 import { Placeholder } from "./pages/Placeholder";
@@ -28,7 +29,7 @@ export const routes: RouteObject[] = [
       { path: "/locations/:id", element: <LocationDetail /> },
       { path: "/works", element: <Works /> },
       { path: "/works/:id", element: <WorkDetail /> },
-      { path: "/ask", element: <Placeholder title="AI 탐색" wp="WP-09" /> },
+      { path: "/ask", element: <Ask /> },
       { path: "/courses", element: <Placeholder title="코스" wp="WP-10" /> },
       { path: "/me", element: <MePage /> },
       { path: "/sources", element: <Sources /> },
