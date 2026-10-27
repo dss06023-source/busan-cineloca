@@ -1,12 +1,15 @@
-"""CollectStep: 부산 원본 2종을 작품·촬영지·촬영 관계로 합친다. 레코드는 손으로 만든 가짜다."""
+"""CollectStep·GeocodeStep: 부산 원본 2종을 합치고 주소에 좌표를 채운다. 레코드와 좌표는 손으로 만든 가짜다."""
 
 from datetime import date
 
 import pytest
 
 from app.batch.job import SyncContext
-from app.batch.steps import CollectStep, gu_of
+from app.batch.steps import CollectStep, GeocodeStep, gu_of
 from app.data.adapters.busan import FilmLocation
+from app.data.adapters.errors import AdapterTimeout, QuotaExhausted
+from app.data.adapters.juso import GeoPoint
+from app.data.models import StagedLocation
 
 
 class Src:
@@ -91,3 +94,78 @@ async def test_build_steps_follows_keys():
     steps = await build_steps(Settings(data_go_kr_key="k", kmdb_csv_path=""), None, None)
     assert [s.name for s in steps] == ["collect"]
     assert [src.source_id for src in steps[0].sources] == ["DATA-01", "DATA-02"]
+
+
+class FakeGeocoder:
+    def __init__(self, answers):
+        self.answers, self.calls = answers, []
+
+    async def geocode(self, address):
+        self.calls.append(address)
+        a = self.answers.get(address)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+
+def loc(key, address, gu=None, **kw):
+    return StagedLocation(key, key, key, address, gu, **kw)
+
+
+async def geocode(locations, answers, known=None):
+    async def known_fn():
+        return known or {}
+
+    g = FakeGeocoder(answers)
+    ctx = SyncContext(locations=locations)
+    await GeocodeStep(g, known_fn).run(ctx)
+    return {x.ext_key: x for x in ctx.locations}, ctx.failures, g.calls
+
+
+async def test_geocode_fills_coordinates_and_marks_failures():
+    out, failures, calls = await geocode(
+        [loc("a", "부산 중구 1", "중구"), loc("b", "부산 어딘가"), loc("c", None), loc("d", "부산 동구 2")],
+        {"부산 중구 1": GeoPoint(35.1, 129.0, "도로명", "중구"), "부산 동구 2": AdapterTimeout("t")},
+    )
+    assert (out["a"].lat, out["a"].lon, out["a"].geocode_status) == (35.1, 129.0, "ok")
+    assert out["b"].geocode_status == "failed" and out["b"].lat is None
+    assert out["c"].geocode_status == "failed" and "c" not in calls  # 주소 없는 곳은 부르지 않음
+    assert out["d"].geocode_status == "failed"
+    assert failures == [{"step": "geocode", "error": "AdapterTimeout", "count": 1}]  # 주소는 남기지 않음
+
+
+async def test_geocode_fills_missing_gu_but_keeps_parsed_one():
+    out, _, _ = await geocode(
+        [loc("a", "주소A"), loc("b", "주소B", "남구")],
+        {"주소A": GeoPoint(35.0, 129.0, "r", "해운대구"), "주소B": GeoPoint(35.0, 129.0, "r", "수영구")},
+    )
+    assert (out["a"].gu, out["b"].gu) == ("해운대구", "남구")
+
+
+async def test_geocode_reuses_previous_result_for_same_address():
+    out, _, calls = await geocode(
+        [loc("a", "같은 주소"), loc("b", "바뀐 주소")],
+        {"바뀐 주소": GeoPoint(35.2, 129.2, "r", "북구")},
+        known={"a": ("같은 주소", 35.5, 129.5), "b": ("예전 주소", 1.0, 1.0)},
+    )
+    assert calls == ["바뀐 주소"]
+    assert (out["a"].lat, out["a"].geocode_status) == (35.5, "ok") and out["b"].lat == 35.2
+
+
+async def test_geocode_stops_calling_after_quota():
+    out, failures, calls = await geocode(
+        [loc("a", "A"), loc("b", "B"), loc("c", "C")],
+        {"A": QuotaExhausted("q"), "B": GeoPoint(35.0, 129.0, "r", "중구")},
+    )
+    assert calls == ["A"] and {x.geocode_status for x in out.values()} == {"failed"}
+    assert failures == [{"step": "geocode", "error": "QuotaExhausted", "count": 1}]
+
+
+async def test_build_steps_adds_geocode_only_with_both_juso_keys():
+    from app.batch.__main__ import build_steps
+    from app.config import Settings
+
+    base = {"data_go_kr_key": "", "kmdb_csv_path": ""}
+    assert await build_steps(Settings(**base, juso_key="k", juso_coord_key=""), None, None) == []
+    steps = await build_steps(Settings(**base, juso_key="k", juso_coord_key="c"), None, None)
+    assert [s.name for s in steps] == ["geocode"]
