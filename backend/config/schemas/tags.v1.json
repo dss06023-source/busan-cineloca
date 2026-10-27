@@ -1,0 +1,5 @@
+{
+  "type": "object",
+  "properties": {"tags": {"type": "array", "items": {"type": "string"}, "maxItems": 5}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}},
+  "required": ["tags", "confidence"]
+}

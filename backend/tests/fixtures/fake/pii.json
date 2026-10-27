@@ -1,0 +1,255 @@
+{
+ "_note": "가짜 개인정보 50건(build-plan 9장). 무작위로 만든 값이며 실제 사람의 정보가 아니다.",
+ "records": [
+  {
+   "kind": "phone",
+   "value": "051-163-7346",
+   "text": "제 번호는 051-163-7346입니다"
+  },
+  {
+   "kind": "email",
+   "value": "fake013@example.org",
+   "text": "연락처 fake013@example.org 남겨요"
+  },
+  {
+   "kind": "rrn",
+   "value": "881118-2414286",
+   "text": "연락처 881118-2414286 남겨요"
+  },
+  {
+   "kind": "card",
+   "value": "6854390889030728",
+   "text": "메일은 6854390889030728이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "010 5231 8333",
+   "text": "연락처 010 5231 8333 남겨요"
+  },
+  {
+   "kind": "email",
+   "value": "fake286@example.org",
+   "text": "fake286@example.org로 연락 주세요"
+  },
+  {
+   "kind": "rrn",
+   "value": "880125-3258623",
+   "text": "880125-3258623 이거 맞나요?"
+  },
+  {
+   "kind": "card",
+   "value": "0355-1267-8902-1956",
+   "text": "제 번호는 0355-1267-8902-1956입니다"
+  },
+  {
+   "kind": "phone",
+   "value": "010 8121 9173",
+   "text": "제 번호는 010 8121 9173입니다"
+  },
+  {
+   "kind": "email",
+   "value": "fake226@example.com",
+   "text": "메일은 fake226@example.com이에요"
+  },
+  {
+   "kind": "rrn",
+   "value": "810928-3309385",
+   "text": "810928-3309385로 연락 주세요"
+  },
+  {
+   "kind": "card",
+   "value": "9287791307202037",
+   "text": "제 번호는 9287791307202037입니다"
+  },
+  {
+   "kind": "phone",
+   "value": "051-864-7398",
+   "text": "연락처 051-864-7398 남겨요"
+  },
+  {
+   "kind": "email",
+   "value": "fake569@example.com",
+   "text": "fake569@example.com로 연락 주세요"
+  },
+  {
+   "kind": "rrn",
+   "value": "950423-1865312",
+   "text": "메일은 950423-1865312이에요"
+  },
+  {
+   "kind": "card",
+   "value": "6793 2142 5839 6760",
+   "text": "메일은 6793 2142 5839 6760이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "051-388-0314",
+   "text": "메일은 051-388-0314이에요"
+  },
+  {
+   "kind": "email",
+   "value": "fake196@example.net",
+   "text": "fake196@example.net 이거 맞나요?"
+  },
+  {
+   "kind": "rrn",
+   "value": "841123-4567321",
+   "text": "연락처 841123-4567321 남겨요"
+  },
+  {
+   "kind": "card",
+   "value": "5317437262262531",
+   "text": "메일은 5317437262262531이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "01047020940",
+   "text": "제 번호는 01047020940입니다"
+  },
+  {
+   "kind": "email",
+   "value": "fake953@example.net",
+   "text": "제 번호는 fake953@example.net입니다"
+  },
+  {
+   "kind": "rrn",
+   "value": "871027-2919416",
+   "text": "871027-2919416 이거 맞나요?"
+  },
+  {
+   "kind": "card",
+   "value": "6321 4193 8962 8336",
+   "text": "연락처 6321 4193 8962 8336 남겨요"
+  },
+  {
+   "kind": "phone",
+   "value": "01095583066",
+   "text": "메일은 01095583066이에요"
+  },
+  {
+   "kind": "email",
+   "value": "fake498@example.org",
+   "text": "제 번호는 fake498@example.org입니다"
+  },
+  {
+   "kind": "rrn",
+   "value": "820703-3883225",
+   "text": "820703-3883225 이거 맞나요?"
+  },
+  {
+   "kind": "card",
+   "value": "5304 1831 2127 8583",
+   "text": "메일은 5304 1831 2127 8583이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "010-0434-3186",
+   "text": "010-0434-3186 이거 맞나요?"
+  },
+  {
+   "kind": "email",
+   "value": "fake488@example.net",
+   "text": "fake488@example.net로 연락 주세요"
+  },
+  {
+   "kind": "rrn",
+   "value": "980427-2866330",
+   "text": "메일은 980427-2866330이에요"
+  },
+  {
+   "kind": "card",
+   "value": "1205 4245 9626 7578",
+   "text": "1205 4245 9626 7578 이거 맞나요?"
+  },
+  {
+   "kind": "phone",
+   "value": "051-647-4242",
+   "text": "051-647-4242로 연락 주세요"
+  },
+  {
+   "kind": "email",
+   "value": "fake561@example.net",
+   "text": "fake561@example.net로 연락 주세요"
+  },
+  {
+   "kind": "rrn",
+   "value": "910921-3304508",
+   "text": "메일은 910921-3304508이에요"
+  },
+  {
+   "kind": "card",
+   "value": "9093 7879 7960 1200",
+   "text": "메일은 9093 7879 7960 1200이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "010-0617-8383",
+   "text": "메일은 010-0617-8383이에요"
+  },
+  {
+   "kind": "email",
+   "value": "fake018@example.net",
+   "text": "fake018@example.net 이거 맞나요?"
+  },
+  {
+   "kind": "rrn",
+   "value": "750712-3764630",
+   "text": "750712-3764630 이거 맞나요?"
+  },
+  {
+   "kind": "card",
+   "value": "8924-0363-4336-5415",
+   "text": "제 번호는 8924-0363-4336-5415입니다"
+  },
+  {
+   "kind": "phone",
+   "value": "010-7525-3868",
+   "text": "메일은 010-7525-3868이에요"
+  },
+  {
+   "kind": "email",
+   "value": "fake088@example.com",
+   "text": "fake088@example.com 이거 맞나요?"
+  },
+  {
+   "kind": "rrn",
+   "value": "940823-3885322",
+   "text": "메일은 940823-3885322이에요"
+  },
+  {
+   "kind": "card",
+   "value": "0962730898638408",
+   "text": "0962730898638408 이거 맞나요?"
+  },
+  {
+   "kind": "phone",
+   "value": "010 6288 5736",
+   "text": "제 번호는 010 6288 5736입니다"
+  },
+  {
+   "kind": "email",
+   "value": "fake587@example.com",
+   "text": "fake587@example.com 이거 맞나요?"
+  },
+  {
+   "kind": "rrn",
+   "value": "971226-1217727",
+   "text": "제 번호는 971226-1217727입니다"
+  },
+  {
+   "kind": "card",
+   "value": "2726043149975272",
+   "text": "메일은 2726043149975272이에요"
+  },
+  {
+   "kind": "phone",
+   "value": "010-0163-1249",
+   "text": "010-0163-1249 이거 맞나요?"
+  },
+  {
+   "kind": "email",
+   "value": "fake028@example.org",
+   "text": "메일은 fake028@example.org이에요"
+  }
+ ]
+}

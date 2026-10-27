@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "kmdb_id": {"type": ["string", "null"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "reason": {"type": "string", "maxLength": 200}
+  },
+  "required": ["kmdb_id", "confidence"]
+}

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "genres": {"type": "array", "items": {"type": "string"}},
+    "mood_tags": {"type": "array", "items": {"type": "string"}},
+    "works": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
+    "persons": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
+    "districts": {"type": "array", "items": {"type": "string"}},
+    "start": {"type": "string", "maxLength": 30},
+    "budget_h": {"type": "number", "minimum": 1, "maximum": 8},
+    "avoid": {"type": "array", "items": {"type": "string"}},
+    "out_of_scope": {"type": "boolean"}
+  },
+  "required": ["out_of_scope"]
+}
