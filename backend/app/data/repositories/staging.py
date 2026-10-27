@@ -11,7 +11,8 @@ from psycopg_pool import AsyncConnectionPool
 from app.data.models import StagedLocation, StagedShooting, StagedWork
 
 _WORK_COLS = (
-    "ext_key, title, title_norm, release_year, genres, kmdb_id, kobis_movie_cd, match_status, match_score, source_id"
+    "ext_key, title, title_norm, release_year, genres, kmdb_id, kobis_movie_cd, match_status, match_score,"
+    " source_id, kmdb"
 )
 _LOC_COLS = "ext_key, name, name_norm, address, gu, lat, lon, geocode_status, nearest_station_id, station_walk_min"
 
@@ -29,7 +30,8 @@ ON CONFLICT (ext_key) DO UPDATE SET
   kobis_movie_cd = EXCLUDED.kobis_movie_cd, source_id = EXCLUDED.source_id,
   kmdb_id = CASE WHEN work.match_status = 'reviewed' THEN work.kmdb_id ELSE EXCLUDED.kmdb_id END,
   match_status = CASE WHEN work.match_status = 'reviewed' THEN 'reviewed' ELSE EXCLUDED.match_status END,
-  match_score = CASE WHEN work.match_status = 'reviewed' THEN work.match_score ELSE EXCLUDED.match_score END
+  match_score = CASE WHEN work.match_status = 'reviewed' THEN work.match_score ELSE EXCLUDED.match_score END,
+  kmdb = CASE WHEN work.match_status = 'reviewed' THEN work.kmdb ELSE EXCLUDED.kmdb END
 """
 
 # tags·caution·safety_note·cert_*는 원본에 없는 관리자 값이라 넣지 않는다.
@@ -67,9 +69,10 @@ class StagingRepository:
     async def load(self, works: list[StagedWork], locations: list[StagedLocation],
                    shootings: list[StagedShooting]) -> None:  # fmt: skip
         """stg를 비우고 새로 적재한다."""
+        works_rows = [{**asdict(w), "kmdb": Jsonb(w.kmdb) if w.kmdb else None} for w in works]
         async with self.pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
             await cur.execute("TRUNCATE stg.shooting, stg.work, stg.location")
-            await cur.executemany(_insert("stg.work", _WORK_COLS), [asdict(w) for w in works])
+            await cur.executemany(_insert("stg.work", _WORK_COLS), works_rows)
             await cur.executemany(_insert("stg.location", _LOC_COLS), [asdict(x) for x in locations])
             await cur.executemany(
                 _insert("stg.shooting", "work_key, location_key, source_id, raw, base_date"),
