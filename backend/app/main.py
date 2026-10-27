@@ -8,7 +8,7 @@ from app.api.assembler import Assembler
 from app.api.errors import install_error_handlers
 from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
-from app.api.routers import health, locations
+from app.api.routers import health, locations, sources
 from app.config import Settings, get_settings
 from app.data.db import make_pool
 from app.data.repositories.location import LocationRepository
@@ -45,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(locations.router)
+    app.include_router(sources.router)
     return app
 
 
