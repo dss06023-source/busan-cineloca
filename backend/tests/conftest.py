@@ -1,6 +1,7 @@
 import os
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
@@ -14,8 +15,8 @@ from app.data.migrate import migrate
 FIXTURE = Path(__file__).resolve().parent / "fixtures/templates_fixture.sql"
 
 
-@pytest.fixture(scope="session")
-def db_url() -> Iterator[str]:
+@contextmanager
+def temp_database() -> Iterator[str]:
     """TEST_DATABASE_URL 서버에 빈 DB를 새로 만들고 끝나면 지운다(integration 표시 테스트 전용)."""
     admin = os.environ.get("TEST_DATABASE_URL")
     if not admin:
@@ -23,12 +24,29 @@ def db_url() -> Iterator[str]:
     name = f"cl_test_{uuid.uuid4().hex[:8]}"
     with psycopg.connect(admin, autocommit=True) as conn:
         conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    url = psycopg.conninfo.make_conninfo(admin, dbname=name)
     try:
-        yield url
+        yield psycopg.conninfo.make_conninfo(admin, dbname=name)
     finally:
         with psycopg.connect(admin, autocommit=True) as conn:
             conn.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
+
+
+@pytest.fixture(scope="session")
+def db_url() -> Iterator[str]:
+    with temp_database() as url:
+        yield url
+
+
+@pytest.fixture
+def fresh_db() -> Iterator[str]:
+    with temp_database() as url:
+        yield url
+
+
+@pytest.fixture
+def other_db() -> Iterator[str]:
+    with temp_database() as url:
+        yield url
 
 
 @pytest.fixture(scope="session")
