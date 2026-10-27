@@ -20,7 +20,8 @@ export function NoticeGate({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      {!accepted && (
+      {/* 관리자 화면은 사용자 안내 대상이 아니다(UI-10~12) */}
+      {!accepted && !window.location.pathname.startsWith("/admin") && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notice-title">
           <div className="modal">
             <h2 id="notice-title">이용 안내</h2>

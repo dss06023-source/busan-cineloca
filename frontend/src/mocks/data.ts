@@ -1,5 +1,5 @@
 // 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
-import type { AICourseOut, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
+import type { AICourseOut, ReviewItem, SyncReport, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {
   id: "DEV-SEED",
@@ -187,3 +187,17 @@ export const aiFallback: AICourseOut = {
   options: { genres: ["드라마", "범죄"], mood_tags: ["바다", "야경"], districts: ["중구", "수영구"] },
 };
 export const aiInfeasible: AICourseOut = { ...aiBase, status: "INFEASIBLE", reason: "budget" };
+
+// API-021·022 관리자 목(가짜)
+export const syncReport: SyncReport = {
+  runs: [
+    { id: 2, trigger: "manual", status: "rejected", requested_by: "admin", counts: { location: 120, work: 40, guard: { ok: false, reason: "촬영지 수가 직전보다 40% 줄었습니다" } }, prev_counts: { location: 200, work: 41 }, guard: { ok: false, reason: "촬영지 수가 직전보다 40% 줄었습니다" }, failures: ["DATA-02: 3회 재시도 실패"] },
+    { id: 1, trigger: "manual", status: "published", requested_by: "admin", counts: { location: 200, work: 41 }, prev_counts: null, guard: { ok: true }, failures: [] },
+  ],
+  usage: { "gemini:gemini-3.5-flash-lite": 12 },
+};
+
+export const reviews: ReviewItem[] = [
+  { id: 11, kind: "tag", target_type: "location", target_id: 9, target_label: "부산역 광장", proposal: { tags: ["야경", "역"] }, proposer: "ai", model: "fake", score: null, status: "pending" },
+  { id: 12, kind: "match", target_type: "work", target_id: 2, target_label: "남포동 블루스", proposal: { kmdb_id: "K99999", title: "남포동 블루스" }, proposer: "rule", model: null, score: 0.72, status: "pending" },
+];

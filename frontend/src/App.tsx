@@ -1,9 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, Link, RouterProvider, type RouteObject } from "react-router";
+import { createBrowserRouter, Link, Navigate, RouterProvider, type RouteObject } from "react-router";
 import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
 import { Ask } from "./pages/Ask";
+import { AdminLayout } from "./pages/admin/AdminLayout";
+import { AdminLogin } from "./pages/admin/AdminLogin";
+import { AdminReviews } from "./pages/admin/AdminReviews";
+import { AdminSync } from "./pages/admin/AdminSync";
 import { StampBook } from "./pages/StampBook";
 import { CourseDetail, SavedCourseDetail } from "./pages/CourseDetail";
 import { Courses } from "./pages/Courses";
@@ -27,6 +31,16 @@ function MePage() {
 }
 
 export const routes: RouteObject[] = [
+  { path: "/admin/login", element: <AdminLogin /> },
+  {
+    path: "/admin",
+    element: <AdminLayout />,
+    children: [
+      { index: true, element: <Navigate to="/admin/sync" replace /> },
+      { path: "sync", element: <AdminSync /> },
+      { path: "reviews", element: <AdminReviews /> },
+    ],
+  },
   {
     element: <Layout />,
     children: [
