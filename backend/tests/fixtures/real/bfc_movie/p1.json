@@ -1,0 +1,32 @@
+{
+ "response": {
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  },
+  "body": {
+   "totalCount": "2066",
+   "items": {
+    "item": [
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "동아대학교 부민캠퍼스",
+      "opnDay": "2025-01-24"
+     },
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "동아대학교 석당박물관",
+      "opnDay": "2025-01-24"
+     },
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "부산디지털대학교",
+      "opnDay": "2025-01-24"
+     }
+    ]
+   },
+   "pageNo": "1",
+   "numOfRows": "3"
+  }
+ }
+}

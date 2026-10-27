@@ -1,0 +1,32 @@
+{
+ "response": {
+  "header": {
+   "resultMsg": "NORMAL_CODE",
+   "resultCode": "00"
+  },
+  "body": {
+   "totalCount": "2066",
+   "items": {
+    "item": [
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "부산천(동구 충장대로 255)",
+      "opnDay": "2025-01-24"
+     },
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "부산항 국제여객터미널",
+      "opnDay": "2025-01-24"
+     },
+     {
+      "opusNm": "검은 수녀들",
+      "plcNm": "부산항 연안여객터미널",
+      "opnDay": "2025-01-24"
+     }
+    ]
+   },
+   "pageNo": "2",
+   "numOfRows": "3"
+  }
+ }
+}
