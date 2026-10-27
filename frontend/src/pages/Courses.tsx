@@ -64,11 +64,16 @@ function Recommended() {
       <ul className="list" aria-label="추천 코스 목록">
         {q.data?.items.map((c) => (
           <li key={c.id}>
-            <Link className="list-item" to={`/courses/${c.id}`}>
-              <strong>{c.title}</strong>
-              <span className="muted">
-                {c.start_label} 출발 · {c.stop_count}곳 · {formatMinutes(c.total_min)} · {(c.total_m / 1000).toFixed(1)}km
+            <Link className="list-item tt-row" to={`/courses/${c.id}`}>
+              <span className="tt-main">
+                <strong>{c.title}</strong>
+                <span className="muted">{c.start_label} 출발</span>
               </span>
+              <span className="tt-num">
+                <span className="num">{c.stop_count}</span>곳
+              </span>
+              <span className="tt-num tt-wide">{formatMinutes(c.total_min)}</span>
+              <span className="tt-num num">{(c.total_m / 1000).toFixed(1)}km</span>
             </Link>
           </li>
         ))}
@@ -243,7 +248,7 @@ function AiCourse({ onSaved }: { onSaved: () => void }) {
             ))}
           </select>
         </label>
-        <button type="submit" className="primary" disabled={!accepted || tooLong || !text.trim() || run.isPending}>
+        <button type="submit" className="primary ai" disabled={!accepted || tooLong || !text.trim() || run.isPending}>
           {run.isPending ? "만드는 중…" : "AI 코스 만들기"}
         </button>
       </form>
@@ -288,7 +293,7 @@ function AiCourse({ onSaved }: { onSaved: () => void }) {
       ))}
       {out?.status === "OK" && out.route && out.intro && (
         <>
-          <div className="card" aria-label="코스 소개">
+          <div className="ai-block" aria-label="코스 소개">
             <AiLabel degraded={!out.intro.ai_generated} masked={out.masked} />
             <h2>{out.intro.title}</h2>
             {out.intro.sentences.map((s, i) => (

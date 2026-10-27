@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import type { MapItem, RouteOut } from "../api/client";
+import { lineColor } from "../lib/station";
 import { MapView } from "./MapView";
 import { SourceCards } from "./SourceCard";
 
@@ -37,7 +38,10 @@ export function RouteView({ route, reasons = {}, onMove }: Props) {
         <li className="muted">출발: {route.start.label}</li>
         {route.stops.map((s, i) => (
           <li key={`${s.location_id}-${i}`}>
-            <p className="leg muted">↓ {legText(route.legs[i])}</p>
+            {/* 도시철도 구간은 노선색 막대로, 걷는 구간은 회색 점선으로 */}
+            <p className={route.legs[i].mode === "subway" ? "leg muted subway" : "leg muted"} style={{ borderLeftColor: lineColor(route.legs[i].line)?.bg }}>
+              ↓ {legText(route.legs[i])}
+            </p>
             <div className="stop">
               <span className="stop-no">{s.ord}</span>
               <div style={{ flex: 1 }}>

@@ -72,7 +72,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
     .map((i) => ({ id: i.id, name: i.name, lat: i.lat!, lon: i.lon!, distance_m: i.distance_m, works: i.works, work_count: i.works.length, station: null }));
 
   return (
-    <section className="page">
+    <section className="page page-ask">
       <div className="toolbar">
         <h1 className="grow">AI 탐색</h1>
         <button type="button" className="button" onClick={newChat}>
@@ -94,7 +94,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
             {text.length}/{MAX_LEN}
             {tooLong && " · 200자 이내로 줄여 주세요."}
           </span>
-          <button type="submit" className="primary" disabled={!accepted || tooLong || !text.trim() || run.isPending}>
+          <button type="submit" className="primary ai" disabled={!accepted || tooLong || !text.trim() || run.isPending}>
             {run.isPending ? "찾는 중…" : "찾기"}
           </button>
           <button type="button" className="button" onClick={() => setPanel(panel ? null : (out?.criteria ?? EMPTY))}>
@@ -117,7 +117,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
 
       {out && <Status out={out} />}
       {out && out.chips.length > 0 && out.criteria && (
-        <ul className="tags" aria-label="해석한 조건">
+        <ul className="tags chips-ai" aria-label="해석한 조건">
           {out.chips.map((c) => (
             <li key={c.field}>
               {c.label}{" "}
@@ -148,7 +148,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
       {panel && <FilterPanel key={JSON.stringify(panel)} initial={panel} labels={labels} onSearch={research} busy={run.isPending} />}
 
       {out?.summary && (
-        <div className="card" aria-label="AI 요약">
+        <div className="ai-block" aria-label="AI 요약">
           <AiLabel masked={out.masked} />
           {out.summary.sentences.map((s, i) => (
             <p key={i}>{s}</p>
@@ -159,7 +159,7 @@ export function Ask({ embedded = false }: { embedded?: boolean }) {
 
       {/* 첫 화면 3단에서는 가운데 지도가 따로 있어 작은 지도를 그리지 않는다 */}
       {!embedded && mapItems.length > 0 && !noMap && (
-        <MapView center={mapItems[0] ?? BUSAN_STATION} items={mapItems} onSelect={() => undefined} onUnavailable={() => setNoMap(true)} />
+        <MapView center={mapItems[0] ?? BUSAN_STATION} items={mapItems} tone="ai" onSelect={() => undefined} onUnavailable={() => setNoMap(true)} />
       )}
       {out && out.items.length > 0 && (
         <ul className="list" aria-label="검색 결과">

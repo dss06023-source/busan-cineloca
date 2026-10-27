@@ -8,6 +8,7 @@ import { SourceCards } from "../components/SourceCard";
 import { DEFAULT_RADIUS, RADII } from "../config";
 import { probe, type Position } from "../lib/geo";
 import { directionsUrl } from "../lib/kakao";
+import { StationBadge } from "../components/StationBadge";
 import { stationLabel } from "../lib/station";
 
 type BaseChoice = { kind: "here" } | { kind: "station"; id: string } | { kind: "gu"; gu: string };
@@ -26,13 +27,15 @@ export function SummaryCard({ item }: { item: MapItem }) {
         {item.works.map((w) => w.title).join(", ")}
         {more > 0 && ` 외 ${more}편`}
       </p>
-      <p className="muted">
-        {formatDistance(item.distance_m)}
-        {item.station && ` · ${stationLabel(item.station.name, item.station.line)}`}
+      <p className="meta-line">
+        {item.distance_m != null && <span className="num">{formatDistance(item.distance_m)}</span>}
+        {item.station && <StationBadge name={item.station.name} line={item.station.line} />}
       </p>
       <div className="row">
-        <Link to={`/locations/${item.id}`}>상세 보기</Link>
-        <a href={directionsUrl(item.name, item.lat, item.lon)} target="_blank" rel="noreferrer">
+        <Link className="primary" to={`/locations/${item.id}`}>
+          상세 보기
+        </Link>
+        <a className="button" href={directionsUrl(item.name, item.lat, item.lon)} target="_blank" rel="noreferrer">
           길찾기
         </a>
       </div>
@@ -173,10 +176,11 @@ export function MapHome() {
         </details>
       </header>
 
-      {!listOnly && <MapView center={center} items={items} onSelect={onSelect} onUnavailable={onUnavailable} />}
       {listOnly && <p className="notice">지도를 불러오지 못해 목록으로 보여 드립니다.</p>}
-
-      {selected && <SummaryCard item={selected} />}
+      <div className={listOnly ? undefined : "map-wrap"}>
+        {!listOnly && <MapView center={center} items={items} selectedId={selected?.id ?? null} onSelect={onSelect} onUnavailable={onUnavailable} />}
+        {selected && <SummaryCard item={selected} />}
+      </div>
 
       {result.isError && <p className="error">{(result.error as Error).message}</p>}
       {result.isLoading && <p className="muted">촬영지를 찾는 중…</p>}
@@ -185,12 +189,20 @@ export function MapHome() {
       <ol className="list" aria-label="촬영지 목록">
         {items.map((it) => (
           <li key={it.id}>
-            <button type="button" className="list-item" onClick={() => setSelected(it)}>
-              <strong>{it.name}</strong>
-              <span className="muted">
-                {formatDistance(it.distance_m)} · {it.works.map((w) => w.title).join(", ")}
-                {it.work_count > it.works.length && ` 외 ${it.work_count - it.works.length}편`}
+            <button
+              type="button"
+              className="list-item tt-row"
+              aria-current={selected?.id === it.id ? "true" : undefined}
+              onClick={() => setSelected(it)}
+            >
+              <span className="tt-main">
+                <strong>{it.name}</strong>
+                <span className="muted">
+                  {it.works.map((w) => w.title).join(", ")}
+                  {it.work_count > it.works.length && ` 외 ${it.work_count - it.works.length}편`}
+                </span>
               </span>
+              <span className="tt-num num">{formatDistance(it.distance_m)}</span>
             </button>
           </li>
         ))}

@@ -38,7 +38,8 @@ describe("작품 목록(UI-03)", () => {
     const router = renderAt("/works");
     const list = await screen.findByRole("list", { name: "작품 목록" });
     expect(within(list).getByText("부산 추격전")).toBeTruthy();
-    expect(within(list).getByText(/부산 촬영지 3곳/)).toBeTruthy();
+    // 촬영지 수는 시간표 열(숫자 + 곳)로 보여 주고, 읽기 도구에는 문장으로 읽힌다
+    expect(within(list).getAllByLabelText("부산 촬영지 3곳").length).toBeGreaterThan(0);
     await userEvent.type(screen.getByLabelText("제목 검색"), "추격");
     await userEvent.click(screen.getByText("검색"));
     await userEvent.click(screen.getByText("최신 개봉 순"));
