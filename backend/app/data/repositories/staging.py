@@ -14,6 +14,7 @@ _WORK_COLS = (
     "ext_key, title, title_norm, release_year, genres, kmdb_id, kobis_movie_cd, match_status, match_score,"
     " source_id, kmdb"
 )
+_STG_WORK_COLS = f"{_WORK_COLS}, match_candidate"
 _LOC_COLS = "ext_key, name, name_norm, address, gu, lat, lon, geocode_status, nearest_station_id, station_walk_min"
 
 
@@ -31,7 +32,8 @@ ON CONFLICT (ext_key) DO UPDATE SET
   kmdb_id = CASE WHEN work.match_status = 'reviewed' THEN work.kmdb_id ELSE EXCLUDED.kmdb_id END,
   match_status = CASE WHEN work.match_status = 'reviewed' THEN 'reviewed' ELSE EXCLUDED.match_status END,
   match_score = CASE WHEN work.match_status = 'reviewed' THEN work.match_score ELSE EXCLUDED.match_score END,
-  kmdb = CASE WHEN work.match_status = 'reviewed' THEN work.kmdb ELSE EXCLUDED.kmdb END
+  kmdb = CASE WHEN work.match_status <> 'reviewed' THEN EXCLUDED.kmdb
+              WHEN EXCLUDED.kmdb_id = work.kmdb_id THEN COALESCE(EXCLUDED.kmdb, work.kmdb) ELSE work.kmdb END
 """
 
 # tags·caution·safety_note·cert_*는 원본에 없는 관리자 값이라 넣지 않는다.
@@ -48,6 +50,16 @@ ON CONFLICT (ext_key) DO UPDATE SET
   station_walk_min = CASE WHEN location.geocode_status = 'manual' THEN location.station_walk_min
                           ELSE EXCLUDED.station_walk_min END,
   geocode_status = CASE WHEN location.geocode_status = 'manual' THEN 'manual' ELSE EXCLUDED.geocode_status END
+"""
+
+# 검수 범위 후보는 검수 큐로. 같은 작품·같은 후보를 이미 올렸으면(처리 결과와 상관없이) 다시 올리지 않는다
+_PUBLISH_MATCH_REVIEW = """
+INSERT INTO review_item(kind, target_type, target_id, proposal, proposer, score)
+SELECT 'match', 'work', w.id, jsonb_build_object('kmdb_id', s.match_candidate), 'rule', s.match_score
+FROM stg.work s JOIN work w ON w.ext_key = s.ext_key
+WHERE s.match_candidate IS NOT NULL AND w.match_status <> 'reviewed'
+  AND NOT EXISTS (SELECT 1 FROM review_item r WHERE r.kind = 'match' AND r.target_type = 'work'
+                  AND r.target_id = w.id AND r.proposal->>'kmdb_id' = s.match_candidate)
 """
 
 _PUBLISH_SHOOTING = """
@@ -72,7 +84,7 @@ class StagingRepository:
         works_rows = [{**asdict(w), "kmdb": Jsonb(w.kmdb) if w.kmdb else None} for w in works]
         async with self.pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
             await cur.execute("TRUNCATE stg.shooting, stg.work, stg.location")
-            await cur.executemany(_insert("stg.work", _WORK_COLS), works_rows)
+            await cur.executemany(_insert("stg.work", _STG_WORK_COLS), works_rows)
             await cur.executemany(_insert("stg.location", _LOC_COLS), [asdict(x) for x in locations])
             await cur.executemany(
                 _insert("stg.shooting", "work_key, location_key, source_id, raw, base_date"),
@@ -90,6 +102,7 @@ class StagingRepository:
         """stg를 public에 한 트랜잭션으로 반영하고 반영 뒤 건수를 돌려준다."""
         async with self.pool.connection() as conn, conn.transaction(), conn.cursor() as cur:
             await cur.execute(_PUBLISH_WORK)
+            await cur.execute(_PUBLISH_MATCH_REVIEW)
             await cur.execute("UPDATE work SET retired = true WHERE ext_key NOT IN (SELECT ext_key FROM stg.work)")
             await cur.execute(_PUBLISH_LOCATION)
             await cur.execute(

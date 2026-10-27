@@ -51,3 +51,4 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | BaseApiClient 재시도 | 모든 호출 3회 재시도 | 수집(fetch_all·search)은 3회, KOBIS 등급(rating)은 3초 제한 안에서 1회만 부르고 실패하면 null(FR-107, ERR-006). 어댑터 주소·제한 시간·하루 한도는 config/adapters.yaml, 하루 사용량 키는 usage_counter의 api:<이름> | WP-05 |
 | KMDb 수집 | KmdbClient(API) | 키 승인 전까지 오픈자료 '영화기본정보' CSV를 읽는 KmdbCsvCatalog(data/adapters/kmdb_csv.py, KMDB_CSV_PATH)로 매칭 후보·상세(줄거리·키워드·링크)를 얻음. 포스터·스틸·예고편은 CSV에 없음. 저장 범위는 PolicyGuard의 DATA-04 정책(006부터 STORE) | WP-05 |
 | KMDb 저장 정책(TBD-01) | 설정값(STORE 또는 ID_ONLY), 약관 확인 뒤 결정 | 2026-10-27 팀 결정으로 STORE(마이그레이션 006). 줄거리·키워드·링크를 work.kmdb에 저장하고 이미지 파일은 저장하지 않음. 배치는 kmdb_csv.stored_kmdb()로 StagedWork.kmdb를 채움 | WP-05 |
+| 작품 매칭(WorkMatcher) | 점수 공식 미정 | 0.7×제목 유사도(정규화 후 difflib) + 0.3×연도 점수(같은 해 1.0, 1년 0.9, 2년 0.5, 그 밖 0, 모름 0.5). 검수 후보는 stg.work.match_candidate(마이그레이션 007)로 실어 반영 때 review_item에 넣고, 같은 작품·같은 후보는 다시 올리지 않음. 검수 연결 작품은 다음 동기화가 그 ID로 저장본을 채움 | WP-07 |

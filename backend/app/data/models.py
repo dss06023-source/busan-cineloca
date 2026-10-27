@@ -293,6 +293,7 @@ class StagedWork:
     match_status: str = "unmatched"
     match_score: float = 0.0
     kmdb: dict | None = None  # DATA-04가 STORE일 때 줄거리·키워드·링크(kmdb_csv.stored_kmdb)
+    match_candidate: str | None = None  # 검수로 보낼 KMDb 후보(BR-11 0.6~0.9)
 
 
 @dataclass(frozen=True)

@@ -33,7 +33,7 @@ def run(conn, templates, name, **params):
 def test_migrate_is_idempotent(conn, db_url):
     assert migrate(db_url) == []
     versions = [r["version"] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-    assert versions == ["001", "002", "003", "004", "005", "006"]
+    assert versions == ["001", "002", "003", "004", "005", "006", "007"]
 
 
 def test_kmdb_policy_is_store(conn):

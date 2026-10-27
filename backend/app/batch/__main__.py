@@ -8,26 +8,39 @@ import asyncio
 import logging
 import sys
 
+from psycopg_pool import AsyncConnectionPool
+
 from app.batch.job import IngestStep, SyncJob
-from app.config import get_settings
+from app.batch.steps import MatchWorksStep
+from app.config import Settings, get_settings
+from app.data.adapters.kmdb_csv import KmdbCsvCatalog
+from app.data.adapters.policy import PolicyGuard
 from app.data.db import make_pool
+from app.data.repositories.source import SourceRepository
 from app.data.repositories.staging import StagingRepository
 from app.data.repositories.sync import SyncRepository
+from app.data.repositories.work import WorkRepository
 
 POLL_S = 60
 
 
-def build_steps() -> list[IngestStep]:
-    # 수집·매칭·좌표·역·태그·AI 제안·출처·임베딩 단계는 WP-05 어댑터와 함께 붙인다.
-    # 단계가 없으면 적재 건수가 0이라 건수 가드가 반영을 막는다
-    return []
+async def build_steps(settings: Settings, pool: AsyncConnectionPool) -> list[IngestStep]:
+    # 수집·좌표·역·태그·AI 제안·출처·임베딩 단계는 WP-05 어댑터와 함께 붙인다.
+    # 수집 단계가 없으면 적재 건수가 0이라 건수 가드가 반영을 막는다
+    steps: list[IngestStep] = []
+    if settings.kmdb_csv_path:  # KMDb 키 승인 전에는 CSV로 매칭한다(로드 약 8초)
+        policy = PolicyGuard.from_sources(await SourceRepository(pool).all())
+        catalog = KmdbCsvCatalog.load(settings.kmdb_csv_path)
+        steps.append(MatchWorksStep(catalog, policy, WorkRepository(pool).reviewed_matches))
+    return steps
 
 
 async def main(once: bool) -> None:
-    pool = make_pool(get_settings().database_url)
+    settings = get_settings()
+    pool = make_pool(settings.database_url)
     await pool.open()
     runs = SyncRepository(pool)
-    job = SyncJob(build_steps(), StagingRepository(pool), runs)
+    job = SyncJob(await build_steps(settings, pool), StagingRepository(pool), runs)
     try:
         while True:
             run = await runs.next_requested()
