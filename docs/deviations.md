@@ -42,3 +42,6 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | API-017 입력·응답 | {tokens[]} → {valid[{location, work, iat}], invalid_count} | 입력에 badges[]를, 응답에 badges[{course_key, iat}]를 더해 배지 토큰도 서명을 확인(스탬프북에 확인된 배지만 보이도록). work는 그 촬영지의 최신작 1편. 지워진 촬영지의 토큰도 invalid_count로 셈 | WP-11 |
 | API-018 응답 | {ok, token 또는 missing[]} | course_key를 더함. 추천 코스 "course:<id>", 저장 코스 "custom:"+장소 집합 sha256 앞 16자 | WP-11 |
 | 인증 제외 규칙 위치 | MapService | pipeline/certify.py로 옮김. services 모듈끼리 import할 수 없는데 map·stamp가 같은 규칙을 씀 | WP-11 |
+| API-020 | POST /api/admin/session | 로그아웃용 DELETE를 더함. 쿠키 경로는 /api/admin. 세션은 api 메모리에만 두어 다시 시작하면 다시 로그인. 잠금은 관리자 1명 기준 전역(IP를 기록하지 않으므로) | WP-07 |
+| API-021 응답 | [{run, counts, guard, failures}], usage | {runs[{id, trigger, status, requested_by, counts, prev_counts, guard, failures}], usage}. guard는 counts.guard 값. 대기·실행 중인 요청이 있으면 새로 만들지 않고 그 run_id를 돌려줌 | WP-07 |
+| API-022 | {id, action, edit} | 제안 형식을 태그 {tags[]}, 매칭 {kmdb_id, …}로 정함. edit는 제안 위에 덮어씀. 승인 시 태그는 촬영지 tags에 합치고, 매칭은 work.kmdb_id와 match_status='reviewed'. 목록은 pending만, 대상 이름(target_label)을 함께 | WP-07 |

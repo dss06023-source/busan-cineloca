@@ -327,6 +327,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_api_admin_session_post"];
+        /** Logout */
+        delete: operations["logout_api_admin_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync Report */
+        get: operations["sync_report_api_admin_sync_get"];
+        put?: never;
+        /** Request Sync */
+        post: operations["request_sync_api_admin_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reviews */
+        get: operations["reviews_api_admin_reviews_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Decide */
+        patch: operations["decide_api_admin_reviews_patch"];
+        trace?: never;
+    };
+    "/api/admin/locations/{location_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Location */
+        patch: operations["update_location_api_admin_locations__location_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -359,6 +430,23 @@ export interface components {
             /** Reason */
             reason: ("budget" | "candidates") | null;
             options: components["schemas"]["OptionsOut"] | null;
+        };
+        /** AdminLocationOut */
+        AdminLocationOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Caution */
+            caution: string;
+            /** Safety Note */
+            safety_note: string | null;
+            /** Cert Radius M */
+            cert_radius_m: number;
+            /** Cert Excluded */
+            cert_excluded: boolean;
+            /** Tags */
+            tags: string[];
         };
         /** AskIn */
         AskIn: {
@@ -532,6 +620,20 @@ export interface components {
              */
             result_type: "LOCATION" | "WORK";
         };
+        /** DecideIn */
+        DecideIn: {
+            /** Id */
+            id: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "approve" | "reject";
+            /** Edit */
+            edit?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** FilterSearchIn */
         FilterSearchIn: {
             criteria: components["schemas"]["CriteriaIO"];
@@ -648,6 +750,17 @@ export interface components {
             /** Policy */
             policy: string;
         };
+        /** LocationAttrsIn */
+        LocationAttrsIn: {
+            /** Caution */
+            caution?: ("none" | "private" | "residential" | "school") | null;
+            /** Safety Note */
+            safety_note?: string | null;
+            /** Cert Radius M */
+            cert_radius_m?: number | null;
+            /** Cert Excluded */
+            cert_excluded?: boolean | null;
+        };
         /** LocationDetailOut */
         LocationDetailOut: {
             location: components["schemas"]["LocationOut"];
@@ -707,6 +820,11 @@ export interface components {
             lat: number | null;
             /** Lon */
             lon: number | null;
+        };
+        /** LoginIn */
+        LoginIn: {
+            /** Password */
+            password: string;
         };
         /**
          * ManualIn
@@ -894,6 +1012,36 @@ export interface components {
             /** Release Year */
             release_year: number | null;
         };
+        /** ReviewListOut */
+        ReviewListOut: {
+            /** Items */
+            items: components["schemas"]["ReviewOut"][];
+        };
+        /** ReviewOut */
+        ReviewOut: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Target Type */
+            target_type: string;
+            /** Target Id */
+            target_id: number;
+            /** Target Label */
+            target_label: string | null;
+            /** Proposal */
+            proposal: {
+                [key: string]: unknown;
+            } | null;
+            /** Proposer */
+            proposer: string | null;
+            /** Model */
+            model: string | null;
+            /** Score */
+            score: number | null;
+            /** Status */
+            status: string;
+        };
         /** RouteOut */
         RouteOut: {
             start: components["schemas"]["StartOut"];
@@ -1051,6 +1199,47 @@ export interface components {
             ai_generated: boolean;
             /** Dropped Count */
             dropped_count: number;
+        };
+        /** SyncReportOut */
+        SyncReportOut: {
+            /** Runs */
+            runs: components["schemas"]["SyncRunOut"][];
+            /** Usage */
+            usage: {
+                [key: string]: number;
+            };
+        };
+        /** SyncRequestedOut */
+        SyncRequestedOut: {
+            /** Run Id */
+            run_id: number;
+        };
+        /** SyncRunOut */
+        SyncRunOut: {
+            /** Id */
+            id: number;
+            /** Trigger */
+            trigger: string;
+            /** Status */
+            status: string;
+            /** Requested By */
+            requested_by: string;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            } | null;
+            /** Prev Counts */
+            prev_counts: {
+                [key: string]: unknown;
+            } | null;
+            /** Guard */
+            guard: {
+                [key: string]: unknown;
+            } | null;
+            /** Failures */
+            failures: unknown[] | {
+                [key: string]: unknown;
+            } | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1748,6 +1937,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourcesOut"];
+                };
+            };
+        };
+    };
+    login_api_admin_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_api_admin_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_report_api_admin_sync_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_sync_api_admin_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRequestedOut"];
+                };
+            };
+        };
+    };
+    reviews_api_admin_reviews_get: {
+        parameters: {
+            query?: {
+                kind?: ("tag" | "match") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_api_admin_reviews_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_location_api_admin_locations__location_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationAttrsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminLocationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
