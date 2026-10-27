@@ -21,6 +21,13 @@ export type Spoiler = "none" | "partial";
 export type QueryOut = Schemas["QueryOut"];
 export type Criteria = Schemas["CriteriaIO"];
 export type Chip = Schemas["ChipOut"];
+export type CourseList = Schemas["CourseListOut"];
+export type CourseDetail = Schemas["CourseDetailOut"];
+export type RouteOut = Schemas["RouteOut"];
+export type PlanIn = Schemas["PlanIn"];
+export type StartIn = Schemas["StartIn"];
+export type AICourseIn = Schemas["AICourseIn"];
+export type AICourseOut = Schemas["AICourseOut"];
 export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
@@ -83,6 +90,10 @@ export const endpoints = {
   search: (criteria: Criteria, labels: Record<string, string> = {}) =>
     api<QueryOut>("/api/search", { method: "POST", body: { criteria, labels } }),
   resetQuery: () => api<void>("/api/query/session", { method: "DELETE" }),
+  courses: (theme?: string) => api<CourseList>(`/api/courses${theme ? `?theme=${theme}` : ""}`),
+  course: (id: number) => api<CourseDetail>(`/api/courses/${id}`),
+  planCourse: (body: PlanIn) => api<RouteOut>("/api/courses/plan", { method: "POST", body }),
+  aiCourse: (body: AICourseIn) => api<AICourseOut>("/api/courses/ai", { method: "POST", body, ai: true }),
   intro: (id: number, spoiler: Spoiler) =>
     api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };

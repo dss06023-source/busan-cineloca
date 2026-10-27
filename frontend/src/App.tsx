@@ -4,6 +4,8 @@ import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
 import { Ask } from "./pages/Ask";
+import { CourseDetail, SavedCourseDetail } from "./pages/CourseDetail";
+import { Courses } from "./pages/Courses";
 import { LocationDetail } from "./pages/LocationDetail";
 import { MapHome } from "./pages/MapHome";
 import { Placeholder } from "./pages/Placeholder";
@@ -15,7 +17,9 @@ function MePage() {
   return (
     <section className="page">
       <h1>내 기록</h1>
-      <p className="muted">스탬프북과 저장 코스는 준비 중입니다(WP-10·11).</p>
+      <p className="muted">스탬프북은 준비 중입니다(WP-11).</p>
+      <Link to="/courses">저장한 코스</Link>
+      <br />
       <Link to="/sources">데이터 출처·이용 안내</Link>
     </section>
   );
@@ -30,7 +34,9 @@ export const routes: RouteObject[] = [
       { path: "/works", element: <Works /> },
       { path: "/works/:id", element: <WorkDetail /> },
       { path: "/ask", element: <Ask /> },
-      { path: "/courses", element: <Placeholder title="코스" wp="WP-10" /> },
+      { path: "/courses", element: <Courses /> },
+      { path: "/courses/saved/:key", element: <SavedCourseDetail /> },
+      { path: "/courses/:id", element: <CourseDetail /> },
       { path: "/me", element: <MePage /> },
       { path: "/sources", element: <Sources /> },
       { path: "*", element: <Placeholder title="페이지를 찾을 수 없습니다" wp="404" /> },
