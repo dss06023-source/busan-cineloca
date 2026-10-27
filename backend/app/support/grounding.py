@@ -5,7 +5,8 @@ LLM 문장은 근거 묶음에 있는 이름·숫자만 쓸 수 있다. 근거 �
 """
 
 import re
-from collections.abc import Iterable
+import time
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
@@ -135,3 +136,20 @@ class GroundingVerifier:
                 if _num(n) not in numbers:
                     return f"number:{n}"
         return None
+
+
+class LexiconCache:
+    """EntityLexicon을 지식베이스 이름으로 만들어 ttl_s 동안 쓴다."""
+
+    def __init__(self, load: Callable[[], Awaitable[list[str]]], ttl_s: float = 600, clock=time.monotonic):
+        self.load = load
+        self.ttl_s = ttl_s
+        self.clock = clock
+        self._at: float | None = None
+        self._lexicon: EntityLexicon | None = None
+
+    async def get(self) -> EntityLexicon:
+        now = self.clock()
+        if self._lexicon is None or now - self._at > self.ttl_s:
+            self._lexicon, self._at = EntityLexicon(await self.load()), now
+        return self._lexicon

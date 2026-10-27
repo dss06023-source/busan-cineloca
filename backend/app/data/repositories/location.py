@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from psycopg_pool import AsyncConnectionPool
 
-from app.data.models import Conditions, Location, LocationAttrs, LocationHit, Photo, Point, WorkHit
+from app.data.models import Conditions, DictHit, Location, LocationAttrs, LocationHit, Photo, Point, WorkHit
 from app.data.repositories import templates
 from app.data.repositories._rows import build
 
@@ -64,6 +64,16 @@ class LocationRepository:
             {"id": location_id},
         )
         return build(Photo, rows[0]) if rows else None
+
+    async def by_name(self, text: str, k: int = 3) -> list[DictHit]:
+        """장소 이름 트라이그램 대조(기준 장소 '«장소» 근처', FR-402). 좌표가 있는 장소만."""
+        rows = await self._run(
+            "SELECT 'location' AS kind, name AS surface, id::text AS canonical_id,"
+            " similarity(name, %(q)s) AS score FROM location"
+            " WHERE NOT retired AND lat IS NOT NULL ORDER BY score DESC, id LIMIT %(k)s",
+            {"q": text, "k": k},
+        )
+        return [build(DictHit, r) for r in rows]
 
     async def shooting_sources(self, location_id: int) -> list[str]:
         rows = await self._run(
