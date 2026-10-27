@@ -65,6 +65,13 @@ async def main(once: bool) -> None:
         await pool.close()
 
 
-if __name__ == "__main__":
+def configure_logging() -> None:
     logging.basicConfig(level=logging.INFO)
+    # httpx는 INFO에서 요청 URL 전체를 남기는데, 공공데이터포털 키는 쿼리(serviceKey)에 들어간다(AGENTS.md 비밀 규칙)
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+if __name__ == "__main__":
+    configure_logging()
     asyncio.run(main("--once" in sys.argv))
