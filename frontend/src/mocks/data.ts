@@ -1,5 +1,5 @@
 // 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
-import type { QueryOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
+import type { AICourseOut, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {
   id: "DEV-SEED",
@@ -144,3 +144,46 @@ export const queryFallback: QueryOut = {
   source_ids: [],
   sources: [],
 };
+
+// API-009~012 코스 목(가짜 데이터)
+export const courseList: CourseList = {
+  items: [
+    { id: 1, theme: "work", title: "부산 추격전 따라 걷기", start_label: "부산역", stop_count: 3, total_min: 104, total_m: 15427 },
+    { id: 2, theme: "area", title: "원도심 한 바퀴", start_label: "중앙역", stop_count: 4, total_min: 119, total_m: 2608 },
+  ],
+};
+
+export const route: RouteOut = {
+  start: { label: "부산역", lat: 35.1152, lon: 129.0422 },
+  stops: [
+    { ord: 1, location_id: 9, name: "부산역 광장", gu: "동구", lat: 35.1152, lon: 129.0422, dwell_min: 20, works: [{ id: 3, title: "부산 추격전", release_year: 2017 }] },
+    { ord: 2, location_id: 10, name: "초량 이바구길", gu: "동구", lat: 35.1185, lon: 129.039, dwell_min: 20, works: [] },
+    { ord: 3, location_id: 12, name: "광안리 해변", gu: "수영구", lat: 35.1532, lon: 129.1186, dwell_min: 20, works: [{ id: 3, title: "부산 추격전", release_year: 2017 }] },
+  ],
+  legs: [
+    { mode: "walk", minutes: 0, distance_m: 0, line: null },
+    { mode: "walk", minutes: 8, distance_m: 451, line: null },
+    { mode: "subway", minutes: 36, distance_m: 14976, line: "2호선" },
+  ],
+  total_min: 104,
+  total_m: 15427,
+  source_ids: ["DEV-SEED"],
+  sources: [dev],
+};
+
+export const courseDetail: CourseDetail = { course: courseList.items[0], route };
+
+const aiBase = { preference: null, route: null, reasons: [], intro: null, masked: false, notices: [], reason: null, options: null };
+export const aiOk: AICourseOut = {
+  ...aiBase,
+  status: "OK",
+  route,
+  intro: { title: "부산역에서 시작하는 추격전 코스", sentences: ["부산 추격전의 추격 장면을 따라 걷습니다.", "마지막은 광안리 바다입니다."], ai_generated: true, dropped_count: 0 },
+  reasons: [{ location_id: 12, text: "바다가 보이는 곳이라 골랐습니다." }],
+};
+export const aiFallback: AICourseOut = {
+  ...aiBase,
+  status: "FALLBACK",
+  options: { genres: ["드라마", "범죄"], mood_tags: ["바다", "야경"], districts: ["중구", "수영구"] },
+};
+export const aiInfeasible: AICourseOut = { ...aiBase, status: "INFEASIBLE", reason: "budget" };

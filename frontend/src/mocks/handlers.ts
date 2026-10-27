@@ -1,4 +1,4 @@
-// API-001~007·013~015·019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
+// API-001~015·019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
 import { http, HttpResponse } from "msw";
 import type { QueryOut } from "../api/client";
 import * as data from "./data";
@@ -33,6 +33,29 @@ export const handlers = [
     const body = (await request.json()) as { criteria: QueryOut["criteria"] };
     const chips = data.queryScene3.chips.filter((c) => (c.field === "travel" ? body.criteria?.base_kind : body.criteria?.person_ids));
     return HttpResponse.json({ ...data.queryScene3, summary: null, chips, criteria: body.criteria });
+  }),
+  http.get("/api/courses", () => HttpResponse.json(data.courseList)),
+  http.get("/api/courses/:id", ({ params }) =>
+    Number(params.id) === data.courseDetail.course.id
+      ? HttpResponse.json(data.courseDetail)
+      : HttpResponse.json({ error: { code: "HTTP-404", message: "없음", retry_after: null } }, { status: 404 }),
+  ),
+  // 고른 순서대로 정류장을 돌려준다(목은 위치 9·10·12만 안다)
+  http.post("/api/courses/plan", async ({ request }) => {
+    const body = (await request.json()) as { location_ids: number[] };
+    const stops = body.location_ids
+      .map((id) => data.route.stops.find((s) => s.location_id === id))
+      .filter((s) => s !== undefined)
+      .map((s, i) => ({ ...s, ord: i + 1 }));
+    return HttpResponse.json({ ...data.route, stops, legs: data.route.legs.slice(0, stops.length) });
+  }),
+  // '장애'는 직접 고르기, '1분'은 시간 부족
+  http.post("/api/courses/ai", async ({ request }) => {
+    const body = (await request.json()) as { preference?: string; manual?: unknown };
+    if (body.manual) return HttpResponse.json(data.aiOk);
+    if (body.preference?.includes("장애")) return HttpResponse.json(data.aiFallback);
+    if (body.preference?.includes("1분")) return HttpResponse.json(data.aiInfeasible);
+    return HttpResponse.json(data.aiOk);
   }),
   http.delete("/api/query/session", () => new HttpResponse(null, { status: 204 })),
 ];
