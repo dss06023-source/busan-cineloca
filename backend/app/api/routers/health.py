@@ -33,5 +33,5 @@ async def health(request: Request, pool: AsyncConnectionPool = Depends(get_pool)
         usage = await repo.usage_for(pool, datetime.now(_PACIFIC).date(), "gemini:")
     except (OperationalError, PoolTimeout):
         db = "down"
-    body = HealthOut(db=db, ai_breakers=request.app.state.ai_breakers, gemini_usage=usage)
+    body = HealthOut(db=db, ai_breakers=request.app.state.llm.breaker_states(), gemini_usage=usage)
     return JSONResponse(body.model_dump(), status_code=200 if db == "ok" else 503)

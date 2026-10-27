@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "works": {"type": "array", "items": {"type": "string", "maxLength": 50}, "maxItems": 3},
+    "persons": {"type": "array", "items": {"type": "string", "maxLength": 30}, "maxItems": 3},
+    "genres": {"type": "array", "items": {"type": "string"}},
+    "districts": {"type": "array", "items": {"type": "string"}},
+    "years": {"type": "object", "properties": {"from": {"type": "integer"}, "to": {"type": "integer"}}},
+    "base": {
+      "type": "object",
+      "properties": {"kind": {"enum": ["station", "place", "current"]}, "name": {"type": "string", "maxLength": 30}},
+      "required": ["kind"]
+    },
+    "travel": {
+      "type": "object",
+      "properties": {"mode": {"enum": ["walk", "subway"]}, "minutes": {"type": "integer", "minimum": 1, "maximum": 60}},
+      "required": ["mode", "minutes"]
+    },
+    "result_type": {"enum": ["LOCATION", "WORK"]},
+    "out_of_scope": {"type": "boolean"}
+  },
+  "required": ["result_type", "out_of_scope"]
+}

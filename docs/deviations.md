@@ -18,3 +18,6 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | ERR-016 처리 위치 | ErrorHandler | RequestLogger가 받아 500 + request_id를 돌려주고, 정제한 스택 추적은 jsonl 로그에만 남김 | WP-01 |
 | 시드 내보내기 | pg_dump 전체(스키마 포함) | 데이터만 내보내고(`--data-only --on-conflict-do-nothing`), 적재할 때 마이그레이션으로 스키마를 먼저 만든다. 스키마의 기준을 마이그레이션 하나로 둠 | WP-02 |
 | 미니 시드 | 실제 원본 응답에서 고른 20곳 | 작업 환경에서 공공 API에 닿지 않아, 실제 장소 이름 + 근사 좌표 + 지어낸 작품·인물로 만든 개발용 시드(source `DEV-SEED`). 키 발급 뒤 실제 응답으로 교체 | WP-02 |
+| GeminiProvider API | Interactions API(`/v1beta/interactions`, `response_format`, `output_text`) | 안정 API `models/{model}:generateContent`(`responseMimeType`·`responseJsonSchema`·`thinkingConfig.thinkingLevel`). 작업 환경에서 Interactions 문서를 확인할 수 없었음. 키를 받으면 실호출 1회로 확인하고, 바꾸려면 이 클래스만 고친다 | WP-06 |
+| 마스킹 위치 | LLMClient 안 | 부른 쪽(services)이 `PrivacyGuard.mask_inputs()`로 마스킹한 입력을 넘긴다. 계층 규칙상 data/ai_gateway가 support를 import할 수 없음 | WP-06 |
+| 상태 확인의 차단기 상태 | app.state.ai_breakers 딕셔너리 | `app.state.llm.breaker_states()`를 매번 읽음 | WP-06 |
