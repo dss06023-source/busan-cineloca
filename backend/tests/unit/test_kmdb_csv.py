@@ -6,8 +6,9 @@ from pathlib import Path
 import pytest
 
 from app.data.adapters.errors import AdapterError, ResponseFormatError
-from app.data.adapters.kmdb_csv import COLUMNS, KmdbCsvCatalog, parse_row, read_csv
+from app.data.adapters.kmdb_csv import COLUMNS, KmdbCsvCatalog, parse_row, read_csv, stored_kmdb
 from app.data.adapters.policy import PolicyGuard
+from app.services.archive.service import info_from_stored
 
 FAKE = Path(__file__).resolve().parents[1] / "fixtures/fake/kmdb_basic.csv"
 
@@ -97,3 +98,10 @@ def test_fixture_is_cp949_with_25_column_header():
     with open(FAKE, encoding="cp949", newline="") as f:
         rows = list(csv.reader(f))
     assert len(rows[0]) == 25 and all(len(r) == 26 for r in rows[1:])
+
+
+def test_stored_kmdb_round_trips_to_movie_info(catalog):
+    m = catalog.by_id["K90002"]
+    info = info_from_stored(stored_kmdb(m))
+    assert info.source_id == "DATA-04" and info.plot == m.plot and info.link == m.link
+    assert info.keywords == list(m.keywords) and info.posters == []

@@ -16,7 +16,19 @@ from app.data.repositories.sync import SyncRepository
 pytestmark = pytest.mark.integration
 
 WORKS = [
-    StagedWork("t:해운대:2009", "해운대", "해운대", 2009, "DATA-01", ["드라마"], "K1", None, "auto", 0.95),
+    StagedWork(
+        "t:해운대:2009",
+        "해운대",
+        "해운대",
+        2009,
+        "DATA-01",
+        ["드라마"],
+        "K1",
+        None,
+        "auto",
+        0.95,
+        kmdb={"source_id": "DATA-04", "plot": "가짜 줄거리", "keywords": ["쓰나미"], "link": "https://x"},
+    ),
     StagedWork("t:친구:2001", "친구", "친구", 2001, "DATA-01", match_status="unmatched"),
 ]
 LOCS = [
@@ -92,6 +104,8 @@ async def test_two_syncs_keep_ids_and_admin_edits(env):
         assert conn.execute("SELECT kmdb_id, match_status FROM work WHERE ext_key = 't:친구:2001'").fetchone() == (
             "K7", "reviewed",
         )  # fmt: skip
+        plot = conn.execute("SELECT kmdb->>'plot' FROM work WHERE ext_key = 't:해운대:2009'").fetchone()[0]
+        assert plot == "가짜 줄거리"
 
 
 async def test_missing_rows_retire_and_return(env):
