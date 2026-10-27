@@ -51,7 +51,7 @@ class WorkRepository:
     async def get(self, work_id: int) -> WorkDetail | None:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
-                f"SELECT {_COLS} FROM work w WHERE w.id = %(id)s AND NOT w.retired", {"id": work_id}
+                f"SELECT {_COLS}, w.kmdb FROM work w WHERE w.id = %(id)s AND NOT w.retired", {"id": work_id}
             )
             row = await cur.fetchone()
             if row is None:
@@ -69,9 +69,27 @@ class WorkRepository:
                 {"id": work_id},
             )
             locations = [build(WorkLocation, r) for r in await cur.fetchall()]
+        kmdb = row.pop("kmdb")
         work = build(Work, row)
         source_ids = list(dict.fromkeys([work.source_id, *(loc.source_id for loc in locations)]))
-        return WorkDetail(work=work, people=people, locations=locations, source_ids=source_ids)
+        return WorkDetail(work=work, people=people, locations=locations, source_ids=source_ids, kmdb=kmdb)
+
+    async def related(self, work_id: int, n: int = 5) -> list[WorkBrief]:
+        """같은 촬영지나 같은 인물을 공유하는 작품, 공유 수 순(FR-802)."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "WITH shared AS ("
+                " SELECT s2.work_id AS id FROM shooting s1 JOIN shooting s2 ON s2.location_id = s1.location_id"
+                " WHERE s1.work_id = %(id)s AND s2.work_id <> %(id)s"
+                " UNION ALL"
+                " SELECT p2.work_id FROM work_person p1 JOIN work_person p2 ON p2.person_id = p1.person_id"
+                " WHERE p1.work_id = %(id)s AND p2.work_id <> %(id)s)"
+                " SELECT w.id, w.title, w.release_year FROM shared JOIN work w ON w.id = shared.id"
+                " WHERE NOT w.retired GROUP BY w.id ORDER BY count(*) DESC, w.release_year DESC NULLS LAST, w.id"
+                " LIMIT %(n)s",
+                {"id": work_id, "n": n},
+            )
+            return [build(WorkBrief, r) for r in await cur.fetchall()]
 
     async def by_locations(self, location_ids: list[int]) -> dict[int, list[WorkBrief]]:
         """촬영지마다 촬영된 작품(최신작 먼저). 요약 카드는 앞의 3편만 쓴다(FR-206)."""

@@ -9,15 +9,18 @@ from app.api.assembler import Assembler
 from app.api.errors import install_error_handlers
 from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
-from app.api.routers import health, locations, sources
+from app.api.routers import health, locations, sources, works
 from app.config import Settings, get_settings
 from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
+from app.data.repositories.dictionary import DictionaryRepository
 from app.data.repositories.location import LocationRepository
 from app.data.repositories.source import SourceRepository
 from app.data.repositories.station import StationRepository
 from app.data.repositories.work import WorkRepository
+from app.services.archive.service import ArchiveService
 from app.services.map.service import MapService
+from app.support.grounding import PhraseFilter
 from app.support.sources import SourceRegistry
 
 
@@ -39,6 +42,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.ai_limiter = TokenBucketLimiter(settings.ai_rate_per_min)
     app.state.llm = build_llm_client(settings, pool, http)
     app.state.embedder = build_embedder(settings, http)
+    # KMDb 실시간 상세·KOBIS 등급 공급자는 WP-05가 연결한다. 없으면 저장된 항목만, 등급은 null
+    app.state.archive_service = ArchiveService(
+        WorkRepository(pool), DictionaryRepository(pool), app.state.llm, PhraseFilter.from_config()
+    )
     app.state.map_service = MapService(LocationRepository(pool), StationRepository(pool), WorkRepository(pool))
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
@@ -50,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(locations.router)
+    app.include_router(works.router)
     app.include_router(sources.router)
     return app
 
