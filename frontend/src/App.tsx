@@ -1,19 +1,61 @@
-import { useEffect, useState } from "react";
-import { describeHealth, fetchHealth, type Health } from "./health";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createBrowserRouter, Link, RouterProvider, type RouteObject } from "react-router";
+import { ApiError } from "./api/client";
+import { Layout } from "./components/Layout";
+import { NoticeGate } from "./components/NoticeGate";
+import { LocationDetail } from "./pages/LocationDetail";
+import { MapHome } from "./pages/MapHome";
+import { Placeholder } from "./pages/Placeholder";
+import { Sources } from "./pages/Sources";
 
-// WP-01 자리표시 화면. 하단 탭 5개와 지도 홈은 WP-04가 만든다.
-export default function App() {
-  const [health, setHealth] = useState<Health | null | undefined>(undefined);
-
-  useEffect(() => {
-    fetchHealth().then(setHealth);
-  }, []);
-
+function MePage() {
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 480, margin: "0 auto" }}>
-      <h1>부산 씨네로케</h1>
-      <p>영화·드라마 속 부산 촬영지 안내 서비스(개발 중)</p>
-      <p>{health === undefined ? "상태 확인 중…" : describeHealth(health)}</p>
-    </main>
+    <section className="page">
+      <h1>내 기록</h1>
+      <p className="muted">스탬프북과 저장 코스는 준비 중입니다(WP-10·11).</p>
+      <Link to="/sources">데이터 출처·이용 안내</Link>
+    </section>
+  );
+}
+
+export const routes: RouteObject[] = [
+  {
+    element: <Layout />,
+    children: [
+      { path: "/", element: <MapHome /> },
+      { path: "/locations/:id", element: <LocationDetail /> },
+      { path: "/works", element: <Placeholder title="작품" wp="WP-08" /> },
+      { path: "/works/:id", element: <Placeholder title="작품 상세" wp="WP-08" /> },
+      { path: "/ask", element: <Placeholder title="AI 탐색" wp="WP-09" /> },
+      { path: "/courses", element: <Placeholder title="코스" wp="WP-10" /> },
+      { path: "/me", element: <MePage /> },
+      { path: "/sources", element: <Sources /> },
+      { path: "*", element: <Placeholder title="페이지를 찾을 수 없습니다" wp="404" /> },
+    ],
+  },
+];
+
+export function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // 4xx는 다시 시도해도 같으므로 한 번만
+        retry: (n, e) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && n < 1,
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+}
+
+const router = createBrowserRouter(routes);
+const queryClient = makeQueryClient();
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <NoticeGate>
+        <RouterProvider router={router} />
+      </NoticeGate>
+    </QueryClientProvider>
   );
 }

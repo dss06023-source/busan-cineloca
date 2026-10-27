@@ -1,0 +1,971 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "부산 씨네로케 API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "상태"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/search": {
+      "post": {
+        "tags": [
+          "지도"
+        ],
+        "summary": "Search Locations",
+        "operationId": "search_locations_api_locations_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/{location_id}": {
+      "get": {
+        "tags": [
+          "지도"
+        ],
+        "summary": "Get Location",
+        "operationId": "get_location_api_locations__location_id__get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "tags": [
+          "지도"
+        ],
+        "summary": "Meta",
+        "operationId": "meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "tags": [
+          "출처"
+        ],
+        "summary": "Sources",
+        "operationId": "sources_api_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BaseIn": {
+        "properties": {
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          },
+          "station_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Station Id"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          }
+        },
+        "type": "object",
+        "title": "BaseIn",
+        "description": "기준 위치: 좌표, 역, 구·군 중 하나. 좌표는 요청 본문으로만 받고 저장·기록하지 않는다(NFR-003)."
+      },
+      "FiltersIn": {
+        "properties": {
+          "genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genres"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2100.0,
+                "minimum": 1900.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2100.0,
+                "minimum": 1900.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year To"
+          },
+          "gus": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gus"
+          }
+        },
+        "type": "object",
+        "title": "FiltersIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthOut": {
+        "properties": {
+          "db": {
+            "type": "string",
+            "title": "Db"
+          },
+          "ai_breakers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Ai Breakers"
+          },
+          "gemini_usage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gemini Usage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "db",
+          "ai_breakers",
+          "gemini_usage"
+        ],
+        "title": "HealthOut"
+      },
+      "LicenseOut": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "policy": {
+            "type": "string",
+            "title": "Policy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "license",
+          "policy"
+        ],
+        "title": "LicenseOut"
+      },
+      "LocationDetailOut": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationOut"
+          },
+          "photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhotoOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "station": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "walk_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walk Min"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBriefOut"
+            },
+            "type": "array",
+            "title": "Works"
+          },
+          "caution": {
+            "type": "string",
+            "title": "Caution"
+          },
+          "safety_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Note"
+          },
+          "certifiable": {
+            "type": "boolean",
+            "title": "Certifiable"
+          },
+          "cert_block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Block Reason"
+          },
+          "cert_radius_m": {
+            "type": "integer",
+            "title": "Cert Radius M"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location",
+          "photo",
+          "tags",
+          "station",
+          "walk_min",
+          "works",
+          "caution",
+          "safety_note",
+          "certifiable",
+          "cert_block_reason",
+          "cert_radius_m",
+          "source_ids",
+          "sources"
+        ],
+        "title": "LocationDetailOut"
+      },
+      "LocationOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "gu",
+          "lat",
+          "lon"
+        ],
+        "title": "LocationOut"
+      },
+      "MapItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "distance_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance M"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBriefOut"
+            },
+            "type": "array",
+            "title": "Works"
+          },
+          "work_count": {
+            "type": "integer",
+            "title": "Work Count"
+          },
+          "station": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "lat",
+          "lon",
+          "distance_m",
+          "works",
+          "work_count",
+          "station"
+        ],
+        "title": "MapItemOut"
+      },
+      "MetaOut": {
+        "properties": {
+          "districts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Districts"
+          },
+          "stations": {
+            "items": {
+              "$ref": "#/components/schemas/StationOut"
+            },
+            "type": "array",
+            "title": "Stations"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres"
+          },
+          "year_range": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Range"
+          },
+          "default_station_id": {
+            "type": "string",
+            "title": "Default Station Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "districts",
+          "stations",
+          "genres",
+          "year_range",
+          "default_station_id"
+        ],
+        "title": "MetaOut"
+      },
+      "PhotoOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "title"
+        ],
+        "title": "PhotoOut"
+      },
+      "SearchIn": {
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/BaseIn"
+          },
+          "radius_m": {
+            "type": "integer",
+            "enum": [
+              500,
+              1000,
+              3000
+            ],
+            "title": "Radius M",
+            "default": 1000
+          },
+          "filters": {
+            "$ref": "#/components/schemas/FiltersIn",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "base"
+        ],
+        "title": "SearchIn"
+      },
+      "SearchOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MapItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "source_ids",
+          "sources"
+        ],
+        "title": "SearchOut"
+      },
+      "SourceCardOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "org": {
+            "type": "string",
+            "title": "Org"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "base_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Date"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "org",
+          "name",
+          "base_date",
+          "url"
+        ],
+        "title": "SourceCardOut"
+      },
+      "SourceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "org": {
+            "type": "string",
+            "title": "Org"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "policy": {
+            "type": "string",
+            "title": "Policy"
+          },
+          "base_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "org",
+          "name",
+          "url",
+          "license",
+          "policy",
+          "base_date"
+        ],
+        "title": "SourceOut"
+      },
+      "SourcesOut": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "licenses": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseOut"
+            },
+            "type": "array",
+            "title": "Licenses"
+          },
+          "kobis_notice": {
+            "type": "string",
+            "title": "Kobis Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sources",
+          "licenses",
+          "kobis_notice"
+        ],
+        "title": "SourcesOut"
+      },
+      "StationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "gu": {
+            "type": "string",
+            "title": "Gu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "line",
+          "lat",
+          "lon",
+          "gu"
+        ],
+        "title": "StationOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkBriefOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "release_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "release_year"
+        ],
+        "title": "WorkBriefOut"
+      }
+    }
+  }
+}
