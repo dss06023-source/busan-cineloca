@@ -24,6 +24,14 @@ docker compose -f infra/docker-compose.yml up -d --build
 curl http://localhost:8080/api/health   # {"db":"ok", ...}
 ```
 
+개발용 미니 시드(가짜 작품·인물, 실제 장소 이름과 근사 좌표)를 넣으려면 DB가 빈 상태에서 한 번:
+
+```bash
+docker compose -f infra/docker-compose.yml exec api python -m app.data.seed load /srv/seed/mini_seed.sql
+```
+
+실제 데이터 시드는 C1 배치(WP-07) 뒤 `python -m app.data.seed export seed.sql.gz`로 만들어 GitHub Release에 올립니다.
+
 휴대폰 시연은 `tailscale serve --bg 8080`으로 고정 HTTPS 주소를 엽니다(build-plan 3장).
 
 ## 개발

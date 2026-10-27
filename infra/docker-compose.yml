@@ -25,6 +25,7 @@ services:
       LOG_DIR: /srv/logs
     volumes:
       - api-logs:/srv/logs
+      - ./seed:/srv/seed:ro
     depends_on:
       db: {condition: service_healthy}
     healthcheck:

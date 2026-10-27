@@ -16,3 +16,5 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | 공통 처리 위치 | NoticeCheck·RateLimiter를 미들웨어로 | AI 라우터 의존성 `deps.ai_guard`로 둠. 의존성에서 던진 오류가 오류 처리기를 그대로 타고, AI가 아닌 경로는 아예 거치지 않음 | WP-01 |
 | ERR 코드 없는 HTTP 오류 | 정의 없음 | 404·405 등은 `HTTP-<상태>` 코드로 같은 오류 형식에 담음 | WP-01 |
 | ERR-016 처리 위치 | ErrorHandler | RequestLogger가 받아 500 + request_id를 돌려주고, 정제한 스택 추적은 jsonl 로그에만 남김 | WP-01 |
+| 시드 내보내기 | pg_dump 전체(스키마 포함) | 데이터만 내보내고(`--data-only --on-conflict-do-nothing`), 적재할 때 마이그레이션으로 스키마를 먼저 만든다. 스키마의 기준을 마이그레이션 하나로 둠 | WP-02 |
+| 미니 시드 | 실제 원본 응답에서 고른 20곳 | 작업 환경에서 공공 API에 닿지 않아, 실제 장소 이름 + 근사 좌표 + 지어낸 작품·인물로 만든 개발용 시드(source `DEV-SEED`). 키 발급 뒤 실제 응답으로 교체 | WP-02 |
