@@ -4,6 +4,7 @@ import { ApiError } from "./api/client";
 import { Layout } from "./components/Layout";
 import { NoticeGate } from "./components/NoticeGate";
 import { Ask } from "./pages/Ask";
+import { StampBook } from "./pages/StampBook";
 import { CourseDetail, SavedCourseDetail } from "./pages/CourseDetail";
 import { Courses } from "./pages/Courses";
 import { LocationDetail } from "./pages/LocationDetail";
@@ -17,7 +18,7 @@ function MePage() {
   return (
     <section className="page">
       <h1>내 기록</h1>
-      <p className="muted">스탬프북은 준비 중입니다(WP-11).</p>
+      <StampBook />
       <Link to="/courses">저장한 코스</Link>
       <br />
       <Link to="/sources">데이터 출처·이용 안내</Link>

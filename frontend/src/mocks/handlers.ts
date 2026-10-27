@@ -1,4 +1,4 @@
-// API-001~015·019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
+// API-001~019 목. 목 모드에서 질문에 '장애'가 들어가면 AI 강등 응답을 돌려준다.
 import { http, HttpResponse } from "msw";
 import type { QueryOut } from "../api/client";
 import * as data from "./data";
@@ -56,6 +56,30 @@ export const handlers = [
     if (body.preference?.includes("장애")) return HttpResponse.json(data.aiFallback);
     if (body.preference?.includes("1분")) return HttpResponse.json(data.aiInfeasible);
     return HttpResponse.json(data.aiOk);
+  }),
+  // 방문 인증 목: 정확도 50m 초과면 accuracy, 이미 가진 곳이면 duplicate. 토큰은 가짜 형식 m.<장소>.s
+  http.post("/api/stamps", async ({ request }) => {
+    const b = (await request.json()) as { location_id: number; accuracy_m: number; held: string[] };
+    if (b.accuracy_m > 50) return HttpResponse.json({ ok: false, token: null, reason: "accuracy", distance_m: 12 });
+    if (b.held.includes(`m.${b.location_id}.s`)) return HttpResponse.json({ ok: false, token: null, reason: "duplicate", distance_m: 12 });
+    return HttpResponse.json({ ok: true, token: `m.${b.location_id}.s`, reason: null, distance_m: 12 });
+  }),
+  http.post("/api/stamps/verify", async ({ request }) => {
+    const b = (await request.json()) as { tokens: string[]; badges: string[] };
+    const known = Object.fromEntries(data.search.items.map((i) => [i.id, i]));
+    const ids = b.tokens.map((t) => Number(/^m\.(\d+)\.s$/.exec(t)?.[1])).filter((id) => known[id]);
+    const badges = b.badges.filter((t) => t.startsWith("m.course:")).map((t) => ({ course_key: t.slice(2, -2), iat: 1793000000 }));
+    return HttpResponse.json({
+      valid: ids.map((id) => ({ location: { id, name: known[id].name, gu: "동구" }, work: known[id].works[0] ?? null, iat: 1793000000 })),
+      invalid_count: b.tokens.length - ids.length + b.badges.length - badges.length,
+      badges,
+    });
+  }),
+  http.post("/api/badges", async ({ request }) => {
+    const b = (await request.json()) as { course: { id?: number }; stamps: string[] };
+    const missing = data.route.stops.map((s) => s.location_id).filter((id) => !b.stamps.includes(`m.${id}.s`));
+    const key = `course:${b.course.id ?? "x"}`;
+    return HttpResponse.json(missing.length ? { ok: false, token: null, course_key: key, missing } : { ok: true, token: `m.${key}.b`, course_key: key, missing: [] });
   }),
   http.delete("/api/query/session", () => new HttpResponse(null, { status: 204 })),
 ];

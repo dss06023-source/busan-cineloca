@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router";
 import { endpoints } from "../api/client";
+import { BadgeButton } from "../components/BadgeButton";
 import { RouteView } from "../components/RouteView";
 import { getSaved, MAX_SAVED, saveCourse } from "../lib/savedCourses";
 
@@ -27,6 +28,7 @@ export function CourseDetail() {
         {saved === "ok" ? "저장했습니다" : "이 코스 저장"}
       </button>
       {saved === "full" && <p className="error">코스는 {MAX_SAVED}개까지 저장됩니다.</p>}
+      <BadgeButton course={{ id: course.id }} title={course.title} stops={route.stops} />
     </article>
   );
 }
@@ -39,6 +41,7 @@ export function SavedCourseDetail() {
       <h1>{c.title}</h1>
       <p className="muted">이 브라우저에 저장한 코스입니다({new Date(c.savedAt).toLocaleDateString("ko-KR")}).</p>
       <RouteView route={c.route} />
+      <BadgeButton course={{ location_ids: c.route.stops.map((s) => s.location_id) }} title={c.title} stops={c.route.stops} />
     </article>
   );
 }

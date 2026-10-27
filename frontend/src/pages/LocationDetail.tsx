@@ -1,7 +1,8 @@
-// UI-02 촬영지 상세(FR-207·209). 방문 인증 버튼은 WP-11에서 붙인다.
+// UI-02 촬영지 상세(FR-207·209)와 방문 인증 버튼(FR-501~506).
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { endpoints } from "../api/client";
+import { CertifyButton } from "../components/CertifyButton";
 import { SourceCards } from "../components/SourceCard";
 import { directionsUrl } from "../lib/kakao";
 
@@ -68,7 +69,7 @@ export function LocationDetail() {
       <section>
         <h2>방문 인증</h2>
         {d.certifiable ? (
-          <p className="muted">촬영지 반경 {d.cert_radius_m}m 안에서 인증할 수 있습니다(준비 중).</p>
+          <CertifyButton locationId={loc.id} radius={d.cert_radius_m} />
         ) : (
           <p className="muted">{BLOCK_TEXT[d.cert_block_reason ?? ""] ?? "방문 인증을 할 수 없습니다."}</p>
         )}

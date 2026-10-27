@@ -79,3 +79,6 @@ a.list-item { text-decoration: none; color: inherit; }
 .move { display: flex; flex-direction: column; gap: 2px; }
 .move button { background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; padding: 0 6px; }
 .row.list-row { align-items: center; }
+.stamp-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.stamp { display: flex; flex-direction: column; gap: 2px; border: 2px dashed var(--accent); border-radius: 12px; padding: 10px; font-size: 14px; }
+.badge-item { padding: 6px 0; }
