@@ -48,3 +48,4 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | stg 스키마 | public과 같은 구조 | stg.work·location·shooting만, 관계는 id 대신 ext_key로 잇고 관리자 값(tags·caution·cert_*) 열은 두지 않음. photo·work_person·임베딩은 해당 수집 단계(WP-05)와 함께 추가. 검수로 연결한 작품(match_status='reviewed')의 매칭 결과도 보존 | WP-07 |
 | 건수 가드 '직전' | prev_counts | 직전 sync_run 기록 대신 지금 서비스 중인(retired 아님) 건수로 비교. 반영이 실패한 회차가 기준이 되지 않음 | WP-07 |
 | API-024 | AdminService.draft_course·approve_course, POST·PATCH | services/admin/courses.py의 CourseAdmin으로 나눔. GET /api/admin/courses(초안·승인 전체)를 더함. PATCH {id, stops?, title?, status?}에서 장소를 바꾸면 그 순서로 다시 계산하고 초안으로 돌림(다시 승인해야 공개). 후보는 테마에 맞는 촬영지 중 사유지를 빼고 작품 수 순 5곳 | WP-07 |
+| BaseApiClient 재시도 | 모든 호출 3회 재시도 | 수집(fetch_all·search)은 3회, KOBIS 등급(rating)은 3초 제한 안에서 1회만 부르고 실패하면 null(FR-107, ERR-006). 어댑터 주소·제한 시간·하루 한도는 config/adapters.yaml, 하루 사용량 키는 usage_counter의 api:<이름> | WP-05 |
