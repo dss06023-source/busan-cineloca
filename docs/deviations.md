@@ -39,6 +39,6 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | API-016 응답 | {ok, token 또는 reason, distance_m} | reason 값은 accuracy·distance·duplicate. 이미 가진 장소면 duplicate(FR-505) | WP-11 |
 | API-016 409 | 409와 제외 이유 | ERR-009 오류의 detail에 [{reason: no_coords·excluded·private 등}] | WP-11 |
 | 지오펜스 비교 | 거리 ≤ 반경 | 거리를 0.1m 단위로 반올림해 비교(정확히 반경인 점이 부동소수 오차로 떨어지지 않게) | WP-11 |
-| API-017 응답 | {valid[{location, work, iat}], invalid_count} | work는 그 촬영지의 최신작 1편. 지워진 촬영지의 토큰도 invalid_count로 셈 | WP-11 |
+| API-017 입력·응답 | {tokens[]} → {valid[{location, work, iat}], invalid_count} | 입력에 badges[]를, 응답에 badges[{course_key, iat}]를 더해 배지 토큰도 서명을 확인(스탬프북에 확인된 배지만 보이도록). work는 그 촬영지의 최신작 1편. 지워진 촬영지의 토큰도 invalid_count로 셈 | WP-11 |
 | API-018 응답 | {ok, token 또는 missing[]} | course_key를 더함. 추천 코스 "course:<id>", 저장 코스 "custom:"+장소 집합 sha256 앞 16자 | WP-11 |
 | 인증 제외 규칙 위치 | MapService | pipeline/certify.py로 옮김. services 모듈끼리 import할 수 없는데 map·stamp가 같은 규칙을 씀 | WP-11 |

@@ -1000,6 +1000,24 @@
         "title": "BadgeCourseIn",
         "description": "추천 코스는 {id}, 브라우저에 저장한 코스는 {location_ids}(SD-04)."
       },
+      "BadgeEntryOut": {
+        "properties": {
+          "course_key": {
+            "type": "string",
+            "title": "Course Key"
+          },
+          "iat": {
+            "type": "integer",
+            "title": "Iat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "course_key",
+          "iat"
+        ],
+        "title": "BadgeEntryOut"
+      },
       "BadgeIn": {
         "properties": {
           "course": {
@@ -3296,6 +3314,15 @@
             "type": "array",
             "maxItems": 500,
             "title": "Tokens"
+          },
+          "badges": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Badges"
           }
         },
         "type": "object",
@@ -3316,12 +3343,20 @@
           "invalid_count": {
             "type": "integer",
             "title": "Invalid Count"
+          },
+          "badges": {
+            "items": {
+              "$ref": "#/components/schemas/BadgeEntryOut"
+            },
+            "type": "array",
+            "title": "Badges"
           }
         },
         "type": "object",
         "required": [
           "valid",
-          "invalid_count"
+          "invalid_count",
+          "badges"
         ],
         "title": "VerifyOut"
       },

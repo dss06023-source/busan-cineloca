@@ -60,6 +60,8 @@ async def test_scene5_certify_verify_and_badge(setup):
     tokens.append((await certify(c, 12)).json()["token"])
     full = (await c.post("/api/badges", json={"course": {"id": 1}, "stamps": tokens})).json()
     assert full["ok"] and full["course_key"] == "course:1" and full["token"].count(".") == 2
+    vb = (await c.post("/api/stamps/verify", json={"tokens": [], "badges": [full["token"]]})).json()
+    assert [b["course_key"] for b in vb["badges"]] == ["course:1"] and vb["invalid_count"] == 0
     mine = (await c.post("/api/badges", json={"course": {"location_ids": [7, 9]}, "stamps": tokens})).json()
     assert mine["ok"] and mine["course_key"].startswith("custom:")
 

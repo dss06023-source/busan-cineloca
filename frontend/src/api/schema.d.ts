@@ -376,6 +376,13 @@ export interface components {
             /** Location Ids */
             location_ids?: number[] | null;
         };
+        /** BadgeEntryOut */
+        BadgeEntryOut: {
+            /** Course Key */
+            course_key: string;
+            /** Iat */
+            iat: number;
+        };
         /** BadgeIn */
         BadgeIn: {
             course: components["schemas"]["BadgeCourseIn"];
@@ -1062,6 +1069,8 @@ export interface components {
         VerifyIn: {
             /** Tokens */
             tokens: string[];
+            /** Badges */
+            badges?: string[];
         };
         /** VerifyOut */
         VerifyOut: {
@@ -1069,6 +1078,8 @@ export interface components {
             valid: components["schemas"]["StampOut"][];
             /** Invalid Count */
             invalid_count: number;
+            /** Badges */
+            badges: components["schemas"]["BadgeEntryOut"][];
         };
         /** VodOut */
         VodOut: {

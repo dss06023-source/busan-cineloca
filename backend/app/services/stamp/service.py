@@ -51,9 +51,16 @@ class StampEntry:
 
 
 @dataclass(frozen=True)
+class BadgeEntry:
+    course_key: str
+    iat: int
+
+
+@dataclass(frozen=True)
 class VerifyResult:
     valid: list[StampEntry]
     invalid_count: int
+    badges: list[BadgeEntry] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -108,8 +115,17 @@ class StampService:
             return CertifyResult(False, None, "duplicate", v.distance_m)
         return CertifyResult(True, self.signer.stamp(location_id), None, v.distance_m)
 
-    async def verify(self, tokens: list[str]) -> VerifyResult:
+    async def verify(self, tokens: list[str], badge_tokens: list[str] | None = None) -> VerifyResult:
         stamped, invalid = self._stamped_locations(tokens)
+        badges: dict[str, int] = {}
+        for t in dict.fromkeys((badge_tokens or [])[:MAX_TOKENS]):
+            try:
+                c = self.signer.verify(t, "badge")
+            except BadToken:
+                invalid += 1
+                continue
+            assert c.course_key is not None
+            badges[c.course_key] = min(c.iat, badges.get(c.course_key, c.iat))
         locs = {loc.id: loc for loc in await self.locations.many(list(stamped))}
         works = await self.works.by_locations(list(locs))
         # 지워진 촬영지의 토큰은 보여 줄 수 없으니 무효로 센다
@@ -119,7 +135,7 @@ class StampService:
             for i, iat in sorted(stamped.items(), key=lambda kv: kv[1])
             if i in locs
         ]
-        return VerifyResult(valid, invalid)
+        return VerifyResult(valid, invalid, [BadgeEntry(k, iat) for k, iat in sorted(badges.items(), key=lambda kv: kv[1])])
 
     async def issue_badge(
         self, course_id: int | None, location_ids: list[int] | None, stamps: list[str]

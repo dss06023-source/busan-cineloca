@@ -215,3 +215,10 @@ async def test_badge_recommended_and_custom(svc):
         await svc.issue_badge(None, [1], [])
     forged = await svc.issue_badge(1, None, [signer({"k2": b"x" * 32}).stamp(1), s.stamp(2)])
     assert not forged.ok and forged.missing == [1]
+
+
+async def test_verify_badges(svc):
+    s = svc.signer
+    r = await svc.verify([], [s.badge("course:1"), s.badge("course:1"), s.stamp(1), "x"])
+    assert [b.course_key for b in r.badges] == ["course:1"]
+    assert r.invalid_count == 2  # 스탬프를 배지로 낸 것과 'x'

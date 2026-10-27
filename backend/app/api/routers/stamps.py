@@ -39,6 +39,7 @@ class CertifyOut(BaseModel):
 
 class VerifyIn(BaseModel):
     tokens: list[Token] = Field(max_length=MAX_TOKENS)
+    badges: list[Token] = Field(default_factory=list, max_length=MAX_TOKENS)
 
 
 class StampLocationOut(BaseModel):
@@ -53,9 +54,15 @@ class StampOut(BaseModel):
     iat: int
 
 
+class BadgeEntryOut(BaseModel):
+    course_key: str
+    iat: int
+
+
 class VerifyOut(BaseModel):
     valid: list[StampOut]
-    invalid_count: int
+    invalid_count: int  # 스탬프·배지 토큰 중 서명이 틀리거나 보여 줄 수 없는 것
+    badges: list[BadgeEntryOut]
 
 
 class BadgeCourseIn(BaseModel):
@@ -97,7 +104,7 @@ async def certify(body: CertifyIn, svc: StampService = Depends(get_stamp_service
 
 @router.post("/api/stamps/verify", response_model=VerifyOut)
 async def verify(body: VerifyIn, svc: StampService = Depends(get_stamp_service)):
-    r = await svc.verify(body.tokens)
+    r = await svc.verify(body.tokens, body.badges)
     return VerifyOut(
         valid=[
             StampOut(
@@ -108,6 +115,7 @@ async def verify(body: VerifyIn, svc: StampService = Depends(get_stamp_service))
             for e in r.valid
         ],
         invalid_count=r.invalid_count,
+        badges=[BadgeEntryOut(course_key=b.course_key, iat=b.iat) for b in r.badges],
     )
 
 
