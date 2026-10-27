@@ -33,6 +33,10 @@ export type CertifyOut = Schemas["CertifyOut"];
 export type VerifyOut = Schemas["VerifyOut"];
 export type BadgeIn = Schemas["BadgeIn"];
 export type BadgeOut = Schemas["BadgeOut"];
+export type SyncReport = Schemas["SyncReportOut"];
+export type ReviewItem = Schemas["ReviewOut"];
+export type LocationAttrsIn = Schemas["LocationAttrsIn"];
+export type AdminLocation = Schemas["AdminLocationOut"];
 export type WorkListParams = { q?: string; genre?: string; sort?: "locations" | "year"; page?: number };
 
 export class ApiError extends Error {
@@ -103,6 +107,15 @@ export const endpoints = {
   verifyStamps: (tokens: string[], badges: string[]) =>
     api<VerifyOut>("/api/stamps/verify", { method: "POST", body: { tokens, badges } }),
   badge: (body: BadgeIn) => api<BadgeOut>("/api/badges", { method: "POST", body }),
+  adminLogin: (password: string) => api<void>("/api/admin/session", { method: "POST", body: { password } }),
+  adminLogout: () => api<void>("/api/admin/session", { method: "DELETE" }),
+  syncReport: () => api<SyncReport>("/api/admin/sync?limit=10"),
+  requestSync: () => api<{ run_id: number }>("/api/admin/sync", { method: "POST" }),
+  reviews: (kind?: "tag" | "match") => api<{ items: ReviewItem[] }>(`/api/admin/reviews${kind ? `?kind=${kind}` : ""}`),
+  decide: (body: { id: number; action: "approve" | "reject"; edit?: Record<string, unknown> | null }) =>
+    api<ReviewItem>("/api/admin/reviews", { method: "PATCH", body }),
+  updateLocation: (id: number, body: LocationAttrsIn) =>
+    api<AdminLocation>(`/api/admin/locations/${id}`, { method: "PATCH", body }),
   intro: (id: number, spoiler: Spoiler) =>
     api<Intro>(`/api/works/${id}/intro`, { method: "POST", body: { spoiler }, ai: true }),
 };

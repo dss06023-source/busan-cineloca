@@ -82,3 +82,7 @@ a.list-item { text-decoration: none; color: inherit; }
 .stamp-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .stamp { display: flex; flex-direction: column; gap: 2px; border: 2px dashed var(--accent); border-radius: 12px; padding: 10px; font-size: 14px; }
 .badge-item { padding: 6px 0; }
+.admin-bar { display: flex; gap: 16px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.admin-bar nav { display: flex; gap: 12px; flex: 1; }
+.admin-bar nav a.active { font-weight: 700; }
+.narrow { max-width: 420px; }
