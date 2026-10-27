@@ -11,6 +11,7 @@ from app.batch.job import SyncJob
 from app.data.db import make_pool
 from app.data.migrate import migrate
 from app.data.models import StagedLocation, StagedShooting, StagedWork
+from app.data.repositories.location import LocationRepository
 from app.data.repositories.staging import StagingRepository
 from app.data.repositories.sync import SyncRepository
 from app.data.repositories.work import WorkRepository
@@ -184,3 +185,14 @@ async def test_set_match_clears_stored_kmdb_only_when_id_changes(env):
     assert await repo.set_match(wid, "K9")  # 다른 ID: 다음 동기화가 채울 때까지 비움
     with psycopg.connect(url, autocommit=True) as conn:
         assert conn.execute("SELECT kmdb FROM work WHERE id = %s", (wid,)).fetchone()[0] is None
+
+
+async def test_geocoded_returns_only_ok_rows_with_address(env):
+    pool, url = env
+    await sync(pool, (WORKS, LOCS, SHOOT))
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute("UPDATE location SET geocode_status = 'manual' WHERE ext_key = '자갈치|중구'")
+    # 해운대해수욕장: ok + 주소 있음 → 포함, 범일동: 주소 없음, 자갈치: manual → 제외
+    assert await LocationRepository(pool).geocoded() == {
+        "해운대해수욕장|해운대구": ("해운대구 우동", 35.1587, 129.1604)
+    }

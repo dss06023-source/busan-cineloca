@@ -124,6 +124,15 @@ class LocationRepository:
         by_id = {r["id"]: build(Location, r) for r in rows}
         return [by_id[i] for i in ids if i in by_id]
 
+    async def geocoded(self) -> dict[str, tuple[str, float, float]]:
+        """주소 좌표로 찾은 촬영지의 ext_key → (주소, 위도, 경도). 동기화가 같은 주소를 다시 부르지 않게 한다."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT ext_key, address, lat, lon FROM location"
+                " WHERE geocode_status = 'ok' AND address IS NOT NULL AND lat IS NOT NULL"
+            )
+            return {r["ext_key"]: (r["address"], r["lat"], r["lon"]) for r in await cur.fetchall()}
+
     async def shooting_sources(self, location_id: int) -> list[str]:
         rows = await self._run(
             "SELECT DISTINCT source_id FROM shooting WHERE location_id = %(id)s ORDER BY source_id", {"id": location_id}
