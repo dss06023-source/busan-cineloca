@@ -9,10 +9,11 @@ from app.api.assembler import Assembler
 from app.api.errors import install_error_handlers
 from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
-from app.api.routers import health, locations, query, sources, works
+from app.api.routers import courses, health, locations, query, sources, works
 from app.config import Settings, get_settings
 from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
+from app.data.repositories.course import CourseRepository
 from app.data.repositories.dictionary import DictionaryRepository
 from app.data.repositories.location import LocationRepository
 from app.data.repositories.source import SourceRepository
@@ -20,6 +21,7 @@ from app.data.repositories.station import StationRepository
 from app.data.repositories.work import WorkRepository
 from app.pipeline.query import steps as qs
 from app.services.archive.service import ArchiveService
+from app.services.course.service import CourseService
 from app.services.map.service import DISTRICTS, MapService
 from app.services.query.service import QueryService, SessionStore
 from app.support.grounding import LexiconCache, PhraseFilter
@@ -52,6 +54,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.query_service = _query_service(settings, app.state.llm, app.state.embedder, work_repo, dictionary, locs,
                                              stations, phrases)  # fmt: skip
     app.state.map_service = MapService(locs, stations, work_repo)
+    app.state.course_service = CourseService(
+        CourseRepository(pool), locs, stations, work_repo, dictionary, app.state.llm,
+        LexiconCache(dictionary.lexicon), phrases, app.state.embedder,
+    )  # fmt: skip
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
 
@@ -64,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(locations.router)
     app.include_router(works.router)
     app.include_router(query.router)
+    app.include_router(courses.router)
     app.include_router(sources.router)
     return app
 

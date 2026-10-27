@@ -279,4 +279,14 @@ SELECT setval(pg_get_serial_sequence('person', 'id'), (SELECT max(id) FROM perso
 UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "해운대에 거대한 파도가 밀려온다는 경고가 나오고, 구조대원 한지우는 피서객을 대피시키려 애쓴다.", "keywords": ["해운대", "재난", "구조대"]}' WHERE id = 1;
 UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "형사 강도윤은 부산역에서 사라진 증인을 쫓아 도시 곳곳을 달린다.", "keywords": ["추격", "형사", "부산역"]}' WHERE id = 3;
 UPDATE work SET kmdb = '{"source_id": "DEV-SEED", "plot": "밀수 조직을 잡으려는 작전이 북항에서 시작되고, 강도윤은 잠입 수사를 맡는다.", "keywords": ["북항", "잠입", "밀수"]}' WHERE id = 9;
+-- 추천 코스 개발용 가짜 데이터(WP-10). 총 시간·거리는 RoutePlanner로 계산한 값(API-010은 매번 다시 계산)
+INSERT INTO course(id, theme, theme_ref, title, start_label, start_lat, start_lon, total_min, total_m, status, approved_at) OVERRIDING SYSTEM VALUE VALUES
+ (1, 'work', '3', '「부산 추격전」 따라 걷기', '부산역', 35.1152, 129.0422, 104, 15427, 'approved', now()),
+ (2, 'area', '중구', '중구 원도심 촬영지', '남포역', 35.0978, 129.0347, 119, 2608, 'approved', now()),
+ (3, 'area', '해운대구', '해운대 바다 촬영지(검토 중)', '해운대역', 35.1634, 129.1586, 98, 2513, 'draft', NULL);
+INSERT INTO course_stop(course_id, ord, location_id) VALUES
+ (1, 1, 9), (1, 2, 7), (1, 3, 12),
+ (2, 1, 13), (2, 2, 11), (2, 3, 12), (2, 4, 14),
+ (3, 1, 1), (3, 2, 2), (3, 3, 3);
+SELECT setval(pg_get_serial_sequence('course', 'id'), (SELECT max(id) FROM course));
 COMMIT;

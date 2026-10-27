@@ -465,6 +465,184 @@
         }
       }
     },
+    "/api/courses": {
+      "get": {
+        "tags": [
+          "코스"
+        ],
+        "summary": "List Courses",
+        "operationId": "list_courses_api_courses_get",
+        "parameters": [
+          {
+            "name": "theme",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "work",
+                    "actor",
+                    "area"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Theme"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/{course_id}": {
+      "get": {
+        "tags": [
+          "코스"
+        ],
+        "summary": "Get Course",
+        "operationId": "get_course_api_courses__course_id__get",
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Course Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/plan": {
+      "post": {
+        "tags": [
+          "코스"
+        ],
+        "summary": "Plan Course",
+        "operationId": "plan_course_api_courses_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/courses/ai": {
+      "post": {
+        "tags": [
+          "코스"
+        ],
+        "summary": "Ai Course",
+        "operationId": "ai_course_api_courses_ai_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AICourseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AICourseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources": {
       "get": {
         "tags": [
@@ -489,6 +667,147 @@
   },
   "components": {
     "schemas": {
+      "AICourseIn": {
+        "properties": {
+          "preference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preference"
+          },
+          "manual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManualIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StartIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget_h": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 8.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget H"
+          }
+        },
+        "type": "object",
+        "title": "AICourseIn"
+      },
+      "AICourseOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "FALLBACK",
+              "OUT_OF_SCOPE",
+              "INFEASIBLE"
+            ],
+            "title": "Status"
+          },
+          "preference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreferenceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonOut"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CourseIntroOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "masked": {
+            "type": "boolean",
+            "title": "Masked"
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notices"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "budget",
+                  "candidates"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "preference",
+          "route",
+          "reasons",
+          "intro",
+          "masked",
+          "notices",
+          "reason"
+        ],
+        "title": "AICourseOut"
+      },
       "AskIn": {
         "properties": {
           "text": {
@@ -624,6 +943,112 @@
           "value"
         ],
         "title": "ChoiceOut"
+      },
+      "CourseDetailOut": {
+        "properties": {
+          "course": {
+            "$ref": "#/components/schemas/CourseOut"
+          },
+          "route": {
+            "$ref": "#/components/schemas/RouteOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "course",
+          "route"
+        ],
+        "title": "CourseDetailOut"
+      },
+      "CourseIntroOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "sentences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sentences"
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated"
+          },
+          "dropped_count": {
+            "type": "integer",
+            "title": "Dropped Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "sentences",
+          "ai_generated",
+          "dropped_count"
+        ],
+        "title": "CourseIntroOut"
+      },
+      "CourseListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CourseOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CourseListOut"
+      },
+      "CourseOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "start_label": {
+            "type": "string",
+            "title": "Start Label"
+          },
+          "stop_count": {
+            "type": "integer",
+            "title": "Stop Count"
+          },
+          "total_min": {
+            "type": "integer",
+            "title": "Total Min"
+          },
+          "total_m": {
+            "type": "integer",
+            "title": "Total M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "theme",
+          "title",
+          "start_label",
+          "stop_count",
+          "total_min",
+          "total_m"
+        ],
+        "title": "CourseOut"
       },
       "CriteriaIO": {
         "properties": {
@@ -1101,6 +1526,45 @@
         ],
         "title": "IntroOut"
       },
+      "LegOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "walk",
+              "subway"
+            ],
+            "title": "Mode"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          },
+          "distance_m": {
+            "type": "integer",
+            "title": "Distance M"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "minutes",
+          "distance_m",
+          "line"
+        ],
+        "title": "LegOut"
+      },
       "LicenseOut": {
         "properties": {
           "source_id": {
@@ -1393,6 +1857,45 @@
         ],
         "title": "LocationOut"
       },
+      "ManualIn": {
+        "properties": {
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Genres"
+          },
+          "mood_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Mood Tags"
+          },
+          "districts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Districts"
+          },
+          "avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Avoid"
+          }
+        },
+        "type": "object",
+        "title": "ManualIn",
+        "description": "AI 장애 때 직접 고르는 조건(FR-312). preference.v1과 같은 이름."
+      },
       "MapItemOut": {
         "properties": {
           "id": {
@@ -1557,6 +2060,33 @@
         ],
         "title": "PhotoOut"
       },
+      "PlanIn": {
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/StartIn"
+          },
+          "location_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 2,
+            "title": "Location Ids"
+          },
+          "fixed_order": {
+            "type": "boolean",
+            "title": "Fixed Order",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "location_ids"
+        ],
+        "title": "PlanIn"
+      },
       "PointIO": {
         "properties": {
           "lat": {
@@ -1578,6 +2108,82 @@
           "lon"
         ],
         "title": "PointIO"
+      },
+      "PreferenceOut": {
+        "properties": {
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres",
+            "default": []
+          },
+          "mood_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Mood Tags",
+            "default": []
+          },
+          "work_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Work Ids",
+            "default": []
+          },
+          "person_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Person Ids",
+            "default": []
+          },
+          "gus": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Gus",
+            "default": []
+          },
+          "avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Avoid",
+            "default": []
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "budget_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget H"
+          }
+        },
+        "type": "object",
+        "title": "PreferenceOut"
       },
       "QueryOut": {
         "properties": {
@@ -1752,6 +2358,24 @@
         ],
         "title": "RatingOut"
       },
+      "ReasonOut": {
+        "properties": {
+          "location_id": {
+            "type": "integer",
+            "title": "Location Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_id",
+          "text"
+        ],
+        "title": "ReasonOut"
+      },
       "ResultWorkOut": {
         "properties": {
           "id": {
@@ -1781,6 +2405,60 @@
           "release_year"
         ],
         "title": "ResultWorkOut"
+      },
+      "RouteOut": {
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/StartOut"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/StopOut"
+            },
+            "type": "array",
+            "title": "Stops"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/LegOut"
+            },
+            "type": "array",
+            "title": "Legs"
+          },
+          "total_min": {
+            "type": "integer",
+            "title": "Total Min"
+          },
+          "total_m": {
+            "type": "integer",
+            "title": "Total M"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCardOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "stops",
+          "legs",
+          "total_min",
+          "total_m",
+          "source_ids",
+          "sources"
+        ],
+        "title": "RouteOut"
       },
       "SearchIn": {
         "properties": {
@@ -1961,6 +2639,85 @@
         ],
         "title": "SourcesOut"
       },
+      "StartIn": {
+        "properties": {
+          "station_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Station Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 35.5,
+                "minimum": 34.8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 129.4,
+                "minimum": 128.7
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "title": "StartIn",
+        "description": "출발지: 도시철도역, 촬영지, 현재 위치 중 하나(FR-303). 좌표는 저장·기록하지 않는다."
+      },
+      "StartOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "lat",
+          "lon"
+        ],
+        "title": "StartOut"
+      },
       "StationOut": {
         "properties": {
           "id": {
@@ -1998,6 +2755,64 @@
           "gu"
         ],
         "title": "StationOut"
+      },
+      "StopOut": {
+        "properties": {
+          "ord": {
+            "type": "integer",
+            "title": "Ord"
+          },
+          "location_id": {
+            "type": "integer",
+            "title": "Location Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gu"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "dwell_min": {
+            "type": "integer",
+            "title": "Dwell Min"
+          },
+          "works": {
+            "items": {
+              "$ref": "#/components/schemas/WorkBriefOut"
+            },
+            "type": "array",
+            "title": "Works"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ord",
+          "location_id",
+          "name",
+          "gu",
+          "lat",
+          "lon",
+          "dwell_min",
+          "works"
+        ],
+        "title": "StopOut"
       },
       "SummaryOut": {
         "properties": {
