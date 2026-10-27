@@ -62,3 +62,13 @@ button, select, input { font: inherit; color: inherit; }
 .modal { background: var(--bg); width: min(560px, 100%); border-radius: 16px 16px 0 0; padding: 16px; max-height: 85dvh; overflow: auto; }
 .ledger { padding-left: 18px; }
 .ledger li { margin-bottom: 8px; }
+.query { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); resize: vertical; }
+.examples { padding-left: 18px; }
+.link { background: none; border: 0; padding: 4px 0; color: var(--accent); text-align: left; cursor: pointer; }
+.tags button { background: none; border: 0; cursor: pointer; color: var(--muted); padding: 0 2px; }
+fieldset { border: 0; padding: 0; margin: 8px 0; }
+legend { font-weight: 600; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.filters .checks label { margin: 2px 0; gap: 4px; }
+.filters .checks input { width: auto; margin: 0; }
+a.list-item { text-decoration: none; color: inherit; }

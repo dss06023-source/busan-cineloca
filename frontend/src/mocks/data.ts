@@ -1,5 +1,5 @@
 // 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
-import type { Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
+import type { QueryOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {
   id: "DEV-SEED",
@@ -108,4 +108,39 @@ export const introDegraded: Intro = {
   dropped_count: 0,
   source_ids: ["DEV-SEED"],
   sources: [dev],
+};
+
+const queryBase = () => ({ choices: [], notices: [], works: [], relaxed: [], masked: false, prefill: null });
+
+// 시연 장면 3(미니 시드의 가짜 인물 강도윤)
+export const queryScene3: QueryOut = {
+  ...queryBase(),
+  status: "OK",
+  chips: [
+    { field: "person_ids", label: "강도윤" },
+    { field: "travel", label: "지하철역에서 걸어서 10분" },
+  ],
+  criteria: { person_ids: [1], base_kind: "any_station", travel_mode: "walk", travel_min: 10, result_type: "LOCATION" },
+  labels: { "person_ids:1": "강도윤" },
+  items: [
+    { id: 9, name: "부산역 광장", gu: "동구", lat: 35.1152, lon: 129.0422, distance_m: null, travel_min: 2, works: [{ id: 3, title: "부산 추격전", release_year: 2017 }] },
+    { id: 4, name: "자갈치시장", gu: "중구", lat: 35.0966, lon: 129.0306, distance_m: null, travel_min: 3, works: [{ id: 9, title: "북항 작전", release_year: 2022 }] },
+  ],
+  summary: { sentences: ["강도윤 출연작 촬영지 2곳이 역에서 걸어서 10분 안에 있습니다."], ai_generated: true, dropped_count: 0 },
+  source_ids: ["DATA-08", "DATA-11", "DEV-SEED"],
+  sources: [station, gemini, dev],
+};
+
+// AI 장애: 필터 패널을 직전 조건으로 채운다(FR-411)
+export const queryFallback: QueryOut = {
+  ...queryBase(),
+  status: "FALLBACK",
+  chips: [],
+  criteria: null,
+  labels: {},
+  items: [],
+  summary: null,
+  prefill: { gus: ["중구"], result_type: "LOCATION" },
+  source_ids: [],
+  sources: [],
 };
