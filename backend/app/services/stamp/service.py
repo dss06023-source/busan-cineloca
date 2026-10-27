@@ -135,7 +135,8 @@ class StampService:
             for i, iat in sorted(stamped.items(), key=lambda kv: kv[1])
             if i in locs
         ]
-        return VerifyResult(valid, invalid, [BadgeEntry(k, iat) for k, iat in sorted(badges.items(), key=lambda kv: kv[1])])
+        earned = [BadgeEntry(k, iat) for k, iat in sorted(badges.items(), key=lambda kv: kv[1])]
+        return VerifyResult(valid, invalid, earned)
 
     async def issue_badge(
         self, course_id: int | None, location_ids: list[int] | None, stamps: list[str]
