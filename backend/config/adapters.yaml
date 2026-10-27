@@ -34,3 +34,15 @@ adapters:
     timeout_s: 15.0
     page_size: 500
     daily_limit: 10000  # 〃
+  juso_search:
+    source_id: DATA-06
+    base_url: https://business.juso.go.kr/addrlink
+    timeout_s: 10.0
+    page_size: 10
+    daily_limit: 100000  # 가이드에 하루 한도 없음. 짧은 시간 과다 요청은 E0007(확인 필요)
+  juso_coord:
+    source_id: DATA-06
+    base_url: https://business.juso.go.kr/addrlink
+    timeout_s: 10.0
+    page_size: 1
+    daily_limit: 100000  # 〃
