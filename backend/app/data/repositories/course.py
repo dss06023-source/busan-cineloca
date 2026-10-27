@@ -21,6 +21,24 @@ class CourseRepository:
             )
             return [build(Course, r) for r in await cur.fetchall()]
 
+    async def all(self) -> list[Course]:
+        """관리자용: 초안·승인 코스 전부(API-024)."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(f"SELECT {_COLS} FROM course ORDER BY status = 'approved', id DESC")
+            rows = await cur.fetchall()
+        return [build(Course, {**r, "stops": await self.stops(r["id"])}) for r in rows]
+
+    async def set_status(self, course_id: int, status: str, by: str) -> bool:
+        """승인하면 승인자·시각을 남기고, 초안으로 돌리면 지운다(FR-614)."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "UPDATE course SET status = %(s)s::text,"
+                " approved_by = CASE WHEN %(s)s::text = 'approved' THEN %(by)s END,"
+                " approved_at = CASE WHEN %(s)s::text = 'approved' THEN now() END WHERE id = %(id)s",
+                {"s": status, "by": by, "id": course_id},
+            )
+            return cur.rowcount == 1
+
     async def get(self, course_id: int) -> Course | None:
         async with self.pool.connection() as conn:
             cur = await conn.execute(f"SELECT {_COLS} FROM course WHERE id = %(id)s", {"id": course_id})
@@ -57,6 +75,7 @@ class CourseRepository:
                     "UPDATE course SET theme = %(theme)s, theme_ref = %(theme_ref)s, title = %(title)s,"
                     " start_label = %(start_label)s, start_lat = %(start_lat)s, start_lon = %(start_lon)s,"
                     " total_min = %(total_min)s, total_m = %(total_m)s, status = %(status)s::text,"
+                    " approved_by = CASE WHEN %(status)s::text = 'approved' THEN approved_by END,"
                     " approved_at = CASE WHEN %(status)s::text = 'approved' THEN now() END WHERE id = %(id)s",
                     {**values, "id": course_id},
                 )

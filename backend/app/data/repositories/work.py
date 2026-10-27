@@ -116,6 +116,12 @@ class WorkRepository:
             )
             return await cur.fetchone() is not None
 
+    async def person_name(self, person_id: int) -> str | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT name FROM person WHERE id = %(id)s", {"id": person_id})
+            row = await cur.fetchone()
+        return row["name"] if row else None
+
     async def genres(self) -> list[str]:
         async with self.pool.connection() as conn:
             cur = await conn.execute("SELECT DISTINCT unnest(genres) AS g FROM work WHERE NOT retired ORDER BY g")
