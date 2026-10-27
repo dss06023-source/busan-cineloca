@@ -34,7 +34,7 @@ describe("지도 홈", () => {
     await userEvent.click(await within(list).findByText("부산역 광장"));
     const card = screen.getByRole("region", { name: "부산역 광장 요약" });
     expect(within(card).getByText("서면 나이트, 부산 추격전")).toBeTruthy();
-    expect(within(card).getByText(/부산역역\(1호선\)/)).toBeTruthy();
+    expect(within(card).getByText(/부산역\(1호선\)/)).toBeTruthy();
     const link = within(card).getByText("길찾기") as HTMLAnchorElement;
     expect(link.href).toContain("https://map.kakao.com/link/to/");
   });

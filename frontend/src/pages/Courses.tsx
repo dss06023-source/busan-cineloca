@@ -8,6 +8,7 @@ import { useNotice } from "../components/NoticeGate";
 import { formatMinutes, RouteView } from "../components/RouteView";
 import { probe } from "../lib/geo";
 import { listSaved, MAX_SAVED, removeSaved, saveCourse, type SavedCourse } from "../lib/savedCourses";
+import { stationLabel } from "../lib/station";
 
 const TABS = [
   { id: "recommended", label: "추천 코스" },
@@ -86,7 +87,7 @@ function StartPicker({ value, onChange, allowText = false }: { value: string; on
         <option value="here">현재 위치</option>
         {meta.data?.stations.map((s) => (
           <option key={s.id} value={s.id}>
-            {s.name}역({s.line})
+            {stationLabel(s.name, s.line)}
           </option>
         ))}
       </select>

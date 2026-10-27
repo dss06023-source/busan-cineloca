@@ -8,6 +8,7 @@ import { SourceCards } from "../components/SourceCard";
 import { DEFAULT_RADIUS, RADII } from "../config";
 import { probe, type Position } from "../lib/geo";
 import { directionsUrl } from "../lib/kakao";
+import { stationLabel } from "../lib/station";
 
 type BaseChoice = { kind: "here" } | { kind: "station"; id: string } | { kind: "gu"; gu: string };
 
@@ -27,7 +28,7 @@ export function SummaryCard({ item }: { item: MapItem }) {
       </p>
       <p className="muted">
         {formatDistance(item.distance_m)}
-        {item.station && ` · ${item.station.name}역(${item.station.line})`}
+        {item.station && ` · ${stationLabel(item.station.name, item.station.line)}`}
       </p>
       <div className="row">
         <Link to={`/locations/${item.id}`}>상세 보기</Link>
@@ -124,7 +125,7 @@ export function MapHome() {
             <optgroup label="도시철도역">
               {meta.data?.stations.map((s) => (
                 <option key={s.id} value={`s:${s.id}`}>
-                  {s.name}역({s.line})
+                  {stationLabel(s.name, s.line)}
                 </option>
               ))}
             </optgroup>
