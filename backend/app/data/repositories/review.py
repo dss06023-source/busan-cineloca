@@ -49,6 +49,20 @@ class ReviewRepository:
             )
             return [build(ReviewItem, r) for r in await cur.fetchall()]
 
+    async def pending_labeled(self, kind: str | None = None) -> list[tuple[ReviewItem, str | None]]:
+        """관리자 화면용: 대상 이름(촬영지명·작품명)을 함께."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT {_COLS}, CASE target_type"
+                " WHEN 'location' THEN (SELECT name FROM location l WHERE l.id = r.target_id)"
+                " WHEN 'work' THEN (SELECT title FROM work w WHERE w.id = r.target_id) END AS label"
+                " FROM review_item r WHERE status = 'pending'"
+                " AND (%(kind)s::text IS NULL OR kind = %(kind)s) ORDER BY created_at, id",
+                {"kind": kind},
+            )
+            rows = await cur.fetchall()
+        return [(build(ReviewItem, {k: v for k, v in r.items() if k != "label"}), r["label"]) for r in rows]
+
     async def decide(self, item_id: int, status: str, by: str) -> ReviewItem | None:
         """pending 항목만 처리한다. 이미 처리했거나 없으면 None."""
         if status not in ("approved", "rejected"):
