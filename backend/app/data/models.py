@@ -257,3 +257,23 @@ class Photo:
     url: str
     title: str
     source_id: str
+
+
+@dataclass(frozen=True)
+class CourseCandidate:
+    """AI 맞춤 코스 후보(좌표가 있는 촬영지)와 점수화에 쓰는 속성(FR-309)."""
+
+    id: int
+    name: str
+    lat: float
+    lon: float
+    gu: str | None
+    tags: list[str]
+    caution: str
+    nearest_station_id: str | None
+    station_walk_min: int | None
+    genres: list[str]
+    work_ids: list[int]
+    person_ids: list[int]
+    work_count: int
+    similarity: float | None = None

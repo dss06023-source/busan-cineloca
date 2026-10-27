@@ -2,9 +2,20 @@
 
 from dataclasses import replace
 
+from pgvector import Vector
 from psycopg_pool import AsyncConnectionPool
 
-from app.data.models import Conditions, DictHit, Location, LocationAttrs, LocationHit, Photo, Point, WorkHit
+from app.data.models import (
+    Conditions,
+    CourseCandidate,
+    DictHit,
+    Location,
+    LocationAttrs,
+    LocationHit,
+    Photo,
+    Point,
+    WorkHit,
+)
 from app.data.repositories import templates
 from app.data.repositories._rows import build
 
@@ -74,6 +85,33 @@ class LocationRepository:
             {"q": text, "k": k},
         )
         return [build(DictHit, r) for r in rows]
+
+    async def course_candidates(self, vec: list[float] | None = None) -> list[CourseCandidate]:
+        """좌표가 있는 촬영지 전부와 작품 장르·인물·작품 수, 취향 벡터와의 유사도(벡터가 있을 때)."""
+        sim = "1 - (l.embedding <=> %(vec)s::vector)" if vec is not None else "NULL::float8"
+        rows = await self._run(
+            f"SELECT l.id, l.name, l.lat, l.lon, l.gu, l.tags, l.caution, l.nearest_station_id, l.station_walk_min,"
+            " COALESCE(array_agg(DISTINCT g) FILTER (WHERE g IS NOT NULL), '{}') AS genres,"
+            " COALESCE(array_agg(DISTINCT w.id) FILTER (WHERE w.id IS NOT NULL), '{}') AS work_ids,"
+            " COALESCE(array_agg(DISTINCT wp.person_id) FILTER (WHERE wp.person_id IS NOT NULL), '{}') AS person_ids,"
+            f" count(DISTINCT w.id) AS work_count, {sim} AS similarity"
+            " FROM location l"
+            " LEFT JOIN shooting s ON s.location_id = l.id"
+            " LEFT JOIN work w ON w.id = s.work_id AND NOT w.retired"
+            " LEFT JOIN LATERAL unnest(w.genres) AS g ON true"
+            " LEFT JOIN work_person wp ON wp.work_id = w.id"
+            " WHERE NOT l.retired AND l.lat IS NOT NULL"
+            " GROUP BY l.id ORDER BY l.id",
+            {"vec": Vector(vec).to_text() if vec is not None else None},
+        )
+        return [build(CourseCandidate, r) for r in rows]
+
+    async def many(self, ids: list[int]) -> list[Location]:
+        rows = await self._run(
+            f"SELECT {_LOCATION_COLS} FROM location WHERE id = ANY(%(ids)s) AND NOT retired", {"ids": ids}
+        )
+        by_id = {r["id"]: build(Location, r) for r in rows}
+        return [by_id[i] for i in ids if i in by_id]
 
     async def shooting_sources(self, location_id: int) -> list[str]:
         rows = await self._run(
