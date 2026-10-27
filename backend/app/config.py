@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     fake_ai_mode: str = "ok"  # AI_PROVIDERS=fake일 때 ok|timeout|429|500|bad_schema
     # 세션당 AI 요청 분당 한도(AI-REQ-15, ERR-011)
     ai_rate_per_min: int = 5
+    # 스탬프·배지 토큰 서명 키 "kid:비밀,kid:비밀"(앞의 것으로 서명). 비우면 실행할 때마다 임시 키(개발용)
+    token_keys: str = ""
 
 
 @lru_cache

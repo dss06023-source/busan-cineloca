@@ -1,5 +1,7 @@
 """앱 생성과 의존성 연결. uvicorn app.main:app"""
 
+import logging
+import secrets
 from contextlib import asynccontextmanager
 
 import httpx
@@ -9,7 +11,7 @@ from app.api.assembler import Assembler
 from app.api.errors import install_error_handlers
 from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
-from app.api.routers import courses, health, locations, query, sources, works
+from app.api.routers import courses, health, locations, query, sources, stamps, works
 from app.config import Settings, get_settings
 from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
@@ -24,6 +26,8 @@ from app.services.archive.service import ArchiveService
 from app.services.course.service import CourseService
 from app.services.map.service import DISTRICTS, MapService
 from app.services.query.service import QueryService, SessionStore
+from app.services.stamp.service import StampService
+from app.services.stamp.tokens import TokenSigner, parse_keys
 from app.support.grounding import LexiconCache, PhraseFilter
 from app.support.sources import SourceRegistry
 
@@ -58,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CourseRepository(pool), locs, stations, work_repo, dictionary, app.state.llm,
         LexiconCache(dictionary.lexicon), phrases, app.state.embedder,
     )  # fmt: skip
+    app.state.stamp_service = StampService(locs, work_repo, CourseRepository(pool), _signer(settings))
     # 출처 대장은 처음 쓸 때 읽는다(Assembler). 시작 때 DB가 늦게 떠도 앱은 뜬다
     app.state.assembler = Assembler(SourceRegistry(SourceRepository(pool)))
 
@@ -71,8 +76,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(works.router)
     app.include_router(query.router)
     app.include_router(courses.router)
+    app.include_router(stamps.router)
     app.include_router(sources.router)
     return app
+
+
+def _signer(settings: Settings) -> TokenSigner:
+    if settings.token_keys:
+        return TokenSigner(parse_keys(settings.token_keys))
+    # 키가 없으면 임시 키: 다시 시작하면 이전 스탬프가 무효가 된다. 운영에서는 TOKEN_KEYS를 꼭 넣는다
+    logging.getLogger(__name__).warning("TOKEN_KEYS가 없어 임시 서명 키를 씁니다(개발용)")
+    return TokenSigner({"dev": secrets.token_bytes(32)})
 
 
 def _query_service(settings, llm, embedder, works, dictionary, locs, stations, phrases) -> QueryService:
