@@ -11,7 +11,7 @@
 | 폴더 | 내용 |
 |---|---|
 | `backend/` | FastAPI API·배치(`app/api → services·pipeline → support → data`), 마이그레이션, 테스트 |
-| `frontend/` | React + Vite + TypeScript SPA |
+| `frontend/` | React + Vite + TypeScript SPA(하단 탭, 지도 홈, 촬영지 상세, 출처). `VITE_USE_MOCKS=1 npm run dev`면 백엔드 없이 목 응답 |
 | `infra/` | docker compose, nginx, `.env.example`, DB init |
 | `eval/` | AI 평가셋과 채점 스크립트(WP-12) |
 | `docs/` | 설계 문서 |
@@ -48,5 +48,7 @@ TEST_DATABASE_URL=postgresql://app:app@localhost:5432/postgres pytest   # 전체
 # 프론트엔드
 cd frontend && npm ci && npm run dev    # http://localhost:5173, /api는 8000으로 프록시
 ```
+
+API를 바꾸면 `python -m app.tools.export_openapi ../frontend/src/api/openapi.json` 뒤 `npm run gen:api`로 타입을 다시 만듭니다.
 
 CI는 ruff, import-linter 계층 규칙, SQL 위치 규칙, pytest(실제 PostgreSQL), 프론트엔드 lint·tsc·vitest·build, gitleaks, compose 빌드를 PR마다 돌립니다.

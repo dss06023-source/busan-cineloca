@@ -112,3 +112,10 @@ async def test_meta(client):
     assert len(m["districts"]) == 16 and m["default_station_id"] == "113"
     assert len(m["stations"]) == 12 and "드라마" in m["genres"]
     assert m["year_range"] == [2001, 2022]
+
+
+async def test_sources_ledger(client):
+    body = (await client.get("/api/sources")).json()
+    assert [s["id"] for s in body["sources"]][:2] == ["DATA-01", "DATA-02"]
+    assert len(body["sources"]) == 13 and len(body["licenses"]) == 13
+    assert "통합전산망" in body["kobis_notice"]

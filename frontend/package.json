@@ -8,23 +8,37 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:api": "openapi-typescript src/api/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.105.0",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "react-router": "7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "4.7.0",
     "eslint": "9.39.5",
     "eslint-plugin-react-hooks": "5.2.0",
     "globals": "15.15.0",
+    "jsdom": "26.1.0",
+    "msw": "2.15.0",
+    "openapi-typescript": "7.13.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
     "vite": "6.4.5",
     "vitest": "3.2.7"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
