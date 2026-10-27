@@ -1,0 +1,24 @@
+{
+ "results": {
+  "common": {
+   "countPerPage": "10",
+   "errorMessage": "정상",
+   "errorCode": "0",
+   "totalCount": "1",
+   "currentPage": "1"
+  },
+  "juso": [
+   {
+    "rnMgtSn": "114403113012",
+    "entY": "1953851.7348996028",
+    "entX": "945959.0381341814",
+    "buldSlno": "0",
+    "buldMnnm": "301",
+    "bdMgtSn": "1144012700115950000000001",
+    "udrtYn": "0",
+    "admCd": "1144012700",
+    "bdNm": "한국지역정보개발원(KLID Tower)"
+   }
+  ]
+ }
+}
