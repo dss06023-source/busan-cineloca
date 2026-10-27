@@ -277,3 +277,41 @@ class CourseCandidate:
     person_ids: list[int]
     work_count: int
     similarity: float | None = None
+
+
+# 동기화 스테이징 행(batch → StagingRepository). 관계는 ext_key로 잇는다
+@dataclass(frozen=True)
+class StagedWork:
+    ext_key: str
+    title: str
+    title_norm: str
+    release_year: int | None
+    source_id: str
+    genres: list[str] = field(default_factory=list)
+    kmdb_id: str | None = None
+    kobis_movie_cd: str | None = None
+    match_status: str = "unmatched"
+    match_score: float = 0.0
+
+
+@dataclass(frozen=True)
+class StagedLocation:
+    ext_key: str
+    name: str
+    name_norm: str
+    address: str | None
+    gu: str | None
+    lat: float | None = None
+    lon: float | None = None
+    geocode_status: str = "failed"
+    nearest_station_id: str | None = None
+    station_walk_min: int | None = None
+
+
+@dataclass(frozen=True)
+class StagedShooting:
+    work_key: str
+    location_key: str
+    source_id: str
+    raw: dict
+    base_date: date
