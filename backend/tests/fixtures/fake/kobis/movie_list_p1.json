@@ -1,0 +1,8 @@
+{"movieListResult": {"totCnt": "3", "source": "영화진흥위원회", "movieList": [
+  {"movieCd": "20990001", "movieNm": "가짜 부산 이야기", "movieNmEn": "FAKE BUSAN STORY", "prdtYear": "2019", "openDt": "20200115",
+   "typeNm": "장편", "prdtStatNm": "개봉", "nationAlt": "한국", "genreAlt": "드라마", "repNationNm": "한국", "repGenreNm": "드라마",
+   "directors": [{"peopleNm": "김가짜"}], "companys": [{"companyCd": "20990101", "companyNm": "가짜필름"}]},
+  {"movieCd": "20990002", "movieNm": "가짜 부산 이야기 2", "movieNmEn": "", "prdtYear": "2026", "openDt": "",
+   "typeNm": "장편", "prdtStatNm": "후반작업", "nationAlt": "한국", "genreAlt": "드라마", "repNationNm": "한국", "repGenreNm": "드라마",
+   "directors": [], "companys": []}
+]}}

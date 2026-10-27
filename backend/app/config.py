@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     token_keys: str = ""
     # 관리자 비밀번호 argon2 해시(FR-615). 비우면 관리자 로그인이 언제나 실패한다
     admin_password_hash: str = ""
+    # 외부 데이터 키(WP-05). 비우면 그 어댑터를 쓰지 않는다(KOBIS가 없으면 등급은 null)
+    kobis_key: str = ""
+    kmdb_key: str = ""
+    data_go_kr_key: str = ""
+    juso_key: str = ""
+    tour_api_key: str = ""
 
 
 @lru_cache

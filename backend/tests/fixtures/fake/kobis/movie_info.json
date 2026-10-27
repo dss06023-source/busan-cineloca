@@ -1,0 +1,8 @@
+{"movieInfoResult": {"movieInfo": {"movieCd": "20990001", "movieNm": "가짜 부산 이야기", "movieNmEn": "FAKE BUSAN STORY", "movieNmOg": "",
+  "showTm": "110", "prdtYear": "2019", "openDt": "20200115", "prdtStatNm": "개봉", "typeNm": "장편",
+  "nations": [{"nationNm": "한국"}], "genres": [{"genreNm": "드라마"}],
+  "directors": [{"peopleNm": "김가짜", "peopleNmEn": "KIM Fake"}],
+  "actors": [{"peopleNm": "최가짜", "peopleNmEn": "CHOI Fake", "cast": "", "castEn": ""}],
+  "showTypes": [], "companys": [],
+  "audits": [{"auditNo": "2099-MF00001", "watchGradeNm": "15세이상관람가"}, {"auditNo": "2099-MF00002", "watchGradeNm": "12세이상관람가"}],
+  "staffs": []}, "source": "영화진흥위원회"}}

@@ -14,6 +14,8 @@ from app.api.middleware import JsonlLog, RequestLogger, SessionHeader
 from app.api.ratelimit import TokenBucketLimiter
 from app.api.routers import admin, courses, health, locations, query, sources, stamps, works
 from app.config import Settings, get_settings
+from app.data.adapters.config import load_adapters
+from app.data.adapters.kobis import KobisClient
 from app.data.ai_gateway.factory import build_embedder, build_llm_client
 from app.data.db import make_pool
 from app.data.repositories.course import CourseRepository
@@ -23,6 +25,7 @@ from app.data.repositories.review import ReviewRepository
 from app.data.repositories.source import SourceRepository
 from app.data.repositories.station import StationRepository
 from app.data.repositories.sync import SyncRepository
+from app.data.repositories.usage import UsageRepository
 from app.data.repositories.work import WorkRepository
 from app.pipeline.query import steps as qs
 from app.services.admin.courses import CourseAdmin
@@ -55,11 +58,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.ai_limiter = TokenBucketLimiter(settings.ai_rate_per_min)
     app.state.llm = build_llm_client(settings, pool, http)
     app.state.embedder = build_embedder(settings, http)
-    # KMDb 실시간 상세·KOBIS 등급 공급자는 WP-05가 연결한다. 없으면 저장된 항목만, 등급은 null
+    # KOBIS 등급은 키가 있을 때만 실시간으로 부른다. KMDb 실시간 상세는 키 승인 뒤 연결(없으면 저장된 항목만)
     phrases = PhraseFilter.from_config()
     work_repo, dictionary = WorkRepository(pool), DictionaryRepository(pool)
     locs, stations = LocationRepository(pool), StationRepository(pool)
-    app.state.archive_service = ArchiveService(work_repo, dictionary, app.state.llm, phrases)
+    ratings = _kobis(settings, http, UsageRepository(pool))
+    app.state.archive_service = ArchiveService(work_repo, dictionary, app.state.llm, phrases, ratings=ratings)
     app.state.query_service = _query_service(settings, app.state.llm, app.state.embedder, work_repo, dictionary, locs,
                                              stations, phrases)  # fmt: skip
     app.state.map_service = MapService(locs, stations, work_repo)
@@ -88,6 +92,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sources.router)
     app.include_router(admin.router)
     return app
+
+
+def _kobis(settings: Settings, http: httpx.AsyncClient, usage: UsageRepository) -> KobisClient | None:
+    if not settings.kobis_key:
+        return None
+    return KobisClient(http, settings.kobis_key, load_adapters()["kobis"], usage=usage)
 
 
 def _signer(settings: Settings) -> TokenSigner:
