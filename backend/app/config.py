@@ -1,4 +1,4 @@
-"""환경변수 설정. 값은 .env(infra/.env.example 참고)에서 읽고, 코드에는 기본값만 둔다."""
+"""환경변수 설정. 값은 저장소 루트 .env(.env.example 참고) 또는 backend/.env에서 읽고, 코드에는 기본값만 둔다."""
 
 from functools import lru_cache
 
@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     database_url: str = "postgresql://app:app@localhost:5432/cineloca"
     notice_version: str = "2026-11-01"

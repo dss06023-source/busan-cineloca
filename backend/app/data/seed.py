@@ -21,8 +21,9 @@ EXCLUDE_DATA = ("ai_cache", "usage_counter", "sync_run", "schema_migrations")
 
 def read_sql(path: Path) -> str:
     text = gzip.decompress(path.read_bytes()).decode("utf-8") if path.suffix == ".gz" else path.read_text("utf-8")
-    # pg_dump 16.10 이후의 \restrict 같은 psql 메타 명령은 서버 SQL이 아니므로 뺀다
-    return "\n".join(line for line in text.splitlines() if not line.startswith("\\"))
+    # pg_dump 16.10 이후의 \restrict 같은 psql 메타 명령은 서버 SQL이 아니므로 뺀다.
+    # pg_dump 17 이상이 넣는 SET transaction_timeout은 PostgreSQL 16 서버가 모르므로 뺀다.
+    return "\n".join(line for line in text.splitlines() if not line.startswith(("\\", "SET transaction_timeout")))
 
 
 def load(dsn: str, path: Path) -> None:

@@ -10,5 +10,5 @@ export E2E_DATABASE_URL=${ADMIN_URL%/*}/$DB
 export E2E_LOG_DIR=${E2E_LOG_DIR:-$(mktemp -d)}
 psql "$ADMIN_URL" -qc "DROP DATABASE IF EXISTS $DB WITH (FORCE)" -c "CREATE DATABASE $DB"
 (cd ../backend && .venv/bin/python -m app.data.migrate "$E2E_DATABASE_URL" \
-  && .venv/bin/python -m app.data.seed load ../infra/seed/mini_seed.sql "$E2E_DATABASE_URL")
+  && .venv/bin/python -m app.data.seed load ../db/seed/mini_seed.sql "$E2E_DATABASE_URL")
 npx playwright test "$@"

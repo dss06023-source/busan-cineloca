@@ -11,7 +11,7 @@ from app.main import create_app
 
 pytestmark = pytest.mark.integration
 
-MINI_SEED = Path(__file__).resolve().parents[3] / "infra/seed/mini_seed.sql"
+MINI_SEED = Path(__file__).resolve().parents[3] / "db/seed/mini_seed.sql"
 SEOMYEON = {"lat": 35.1579, "lon": 129.0594}
 
 
