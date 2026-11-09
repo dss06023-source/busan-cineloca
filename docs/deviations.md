@@ -56,3 +56,4 @@ SDD v0.1과 다르게 구현한 점을 한 줄씩 남깁니다(AGENTS.md '기록
 | 원본 좌표·호선 | location·station에 위경도, station.line | 영화 속 부산정보(DATA-01)는 작품명·장소명·개봉일만, 씨네맵(DATA-02)은 도로명주소까지, 역사정보(DATA-08)는 역 코드·역명·주소·전화만 줌(2026-10-27 실제 응답). 좌표는 주소 좌표 API(DATA-06)로 받고, 호선은 다른 원본에서 채워야 함 | WP-05 |
 | 수집 병합 키 | ext_key = kmdb_id 또는 제목+연도 | 작품 ext_key는 "t:" + 정규화 제목(원본 DATA-02에 연도가 없어 연도를 넣으면 연도가 늦게 채워질 때 id가 바뀜), 촬영지는 정규화 장소명|구·군. 주소 없는 DATA-01 장소는 같은 이름이 주소와 함께 한 곳만 있을 때 그 주소를 씀 | WP-07 |
 | 주소 좌표(DATA-06) | 주소 API 하나 | 도로명주소 검색 API(JUSO_KEY)로 도로명코드·건물번호를 찾고 좌표제공 API(JUSO_COORD_KEY, 승인키 따로)로 UTM-K 좌표를 받아 pyproj로 WGS84 변환(JusoGeocoder). 괄호 참고항목은 빼고 검색, 부산광역시가 아닌 결과는 버림 | WP-05 |
+| 저장소 구조 | backend/migrations·backend/config·infra/ | 팀 저장소(JaeWon0720/cineloca) 구조에 맞춰 db/(migrations·seed·init), 루트 config/, 루트 docker-compose.yml·.env.example, frontend/nginx.conf로 옮김. 브랜치·커밋 규칙도 팀 규칙(feature/이슈번호, Conventional Commits)으로 바꿈(2026-11-09) | 공통 |

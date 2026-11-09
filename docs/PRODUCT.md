@@ -30,7 +30,7 @@ web
 
 ## Evidence on Hand
 - docs/build-plan.md, docs/sdd.md
-- 미니 시드(infra/seed/mini_seed.sql, 가짜 데이터), 목업(frontend/src/mocks/data.ts)
+- 미니 시드(db/seed/mini_seed.sql, 가짜 데이터), 목업(frontend/src/mocks/data.ts)
 - 실제 사용자 후기·수치는 없다. 만들어 넣지 않는다.
 
 ## Product Principles

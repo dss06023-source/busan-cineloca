@@ -1,6 +1,6 @@
 -- 개발용 미니 시드(가짜 데이터). 작품·인물·작품-촬영지 연결은 지어낸 것이고, 장소 이름은 실제지만
 -- 좌표·역 소요시간은 근삿값이다. 화면·API 개발과 시연 장면 흐름 확인용이며, C1 배치가 만든 seed.sql.gz로 바꾼다.
--- 적재: python -m app.data.seed load ../infra/seed/mini_seed.sql (빈 DB에 마이그레이션 뒤 한 번)
+-- 적재: python -m app.data.seed load ../db/seed/mini_seed.sql (빈 DB에 마이그레이션 뒤 한 번)
 BEGIN;
 INSERT INTO source(id, org, name, url, license, policy, base_date) VALUES ('DEV-SEED', '부산 씨네로케 팀', '개발용 미니 시드(가짜 데이터)', 'https://github.com/dss06023-source/busan-cineloca', '개발용', 'STORE', '2026-10-27');
 INSERT INTO station(id, name, line, lat, lon, gu) VALUES

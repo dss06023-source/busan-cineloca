@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[4] / "config"
 
 
 @dataclass(frozen=True)

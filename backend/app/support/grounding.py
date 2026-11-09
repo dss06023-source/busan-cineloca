@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 
 # 연도, 분·시간, m·km. 숫자만 떼어 근거의 숫자와 맞춘다
 _NUMBER_PATTERNS = [

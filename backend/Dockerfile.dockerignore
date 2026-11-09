@@ -1,0 +1,8 @@
+# 빌드 맥락은 저장소 루트다(docker-compose.yml). 필요한 폴더만 넣는다.
+*
+!backend/pyproject.toml
+!backend/app
+!backend/prompts
+!db/migrations
+!config
+**/__pycache__
