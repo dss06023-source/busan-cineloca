@@ -83,5 +83,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cp infra/.env.example infra/.env
-      - run: docker compose -f infra/docker-compose.yml build api web
+      - run: cp .env.example .env
+      - run: docker compose build api web

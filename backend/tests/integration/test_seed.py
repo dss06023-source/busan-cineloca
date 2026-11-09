@@ -13,7 +13,7 @@ from app.data.seed import export, load
 
 pytestmark = pytest.mark.integration
 
-MINI_SEED = Path(__file__).resolve().parents[3] / "infra/seed/mini_seed.sql"
+MINI_SEED = Path(__file__).resolve().parents[3] / "db/seed/mini_seed.sql"
 HAEUNDAE_STATION = Point(35.1634, 129.1586)
 
 

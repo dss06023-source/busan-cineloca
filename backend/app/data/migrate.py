@@ -10,7 +10,7 @@ from pathlib import Path
 
 import psycopg
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "db" / "migrations"
 _NAME = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 
 

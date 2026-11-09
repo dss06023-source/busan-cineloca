@@ -13,7 +13,7 @@ from app.main import create_app
 
 pytestmark = pytest.mark.integration
 
-MINI_SEED = Path(__file__).resolve().parents[3] / "infra/seed/mini_seed.sql"
+MINI_SEED = Path(__file__).resolve().parents[3] / "db/seed/mini_seed.sql"
 H = {"X-Session-Id": "6f1c2d1e-8b7a-4c1e-9a52-0d2f3b4c5a6e"}
 PW = "test-only-password"
 

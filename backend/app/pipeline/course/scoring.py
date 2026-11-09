@@ -9,7 +9,7 @@ import yaml
 from app.pipeline.course.route import Place, Route, RoutePlanner
 from app.pipeline.travel import haversine_m
 
-CONFIG = Path(__file__).resolve().parents[3] / "config" / "course.yaml"
+CONFIG = Path(__file__).resolve().parents[4] / "config" / "course.yaml"
 
 
 @cache

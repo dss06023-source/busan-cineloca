@@ -1,4 +1,4 @@
-// 목 데이터: 미니 시드(infra/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
+// 목 데이터: 미니 시드(db/seed/mini_seed.sql)의 일부와 같은 값. 가짜 데이터다.
 import type { AdminCourse, AICourseOut, ReviewItem, SyncReport, CourseDetail, CourseList, QueryOut, RouteOut, Intro, LocationDetail, Meta, Rating, SearchOut, SourceCard, SourcesOut, WorkDetail, WorkList } from "../api/client";
 
 const dev: SourceCard = {

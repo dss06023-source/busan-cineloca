@@ -1,6 +1,5 @@
 # 비밀
 .env
-infra/.env
 
 # Python
 .venv/
@@ -17,5 +16,5 @@ node_modules/
 frontend/dist/
 
 # 시드는 GitHub Release에 올린다
-infra/seed/*.sql.gz
+db/seed/*.sql.gz
 frontend/.vite/
