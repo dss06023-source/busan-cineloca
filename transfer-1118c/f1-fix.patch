@@ -1,0 +1,91 @@
+From 70c5cbb9e593b9d9c42aaf2ec7cf24913852b109 Mon Sep 17 00:00:00 2001
+From: dss06023-source <dss06023@gmail.com>
+Date: Wed, 18 Nov 2026 11:36:10 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20F1=20=EC=83=81=EC=84=B8=EC=97=90?=
+ =?UTF-8?q?=EC=84=9C=20=ED=8F=AC=EC=8A=A4=ED=84=B0=C2=B7=EC=8A=A4=ED=8B=B8?=
+ =?UTF-8?q?=20=EC=A3=BC=EC=86=8C=EB=A5=BC=20=EB=B9=BC=EA=B3=A0=20KMDb=20?=
+ =?UTF-8?q?=EC=9B=90=EB=AC=B8=20=EB=A7=81=ED=81=AC=EB=A1=9C=20=EC=95=88?=
+ =?UTF-8?q?=EB=82=B4=20(#64)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ backend/app/api/schemas/works.py         | 8 ++++----
+ backend/app/services/archive_service.py  | 5 ++---
+ backend/tests/test_archive_service_db.py | 2 +-
+ backend/tests/test_f1_api.py             | 2 --
+ 4 files changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/backend/app/api/schemas/works.py b/backend/app/api/schemas/works.py
+index e7389cd..d866fe6 100644
+--- a/backend/app/api/schemas/works.py
++++ b/backend/app/api/schemas/works.py
+@@ -2,7 +2,7 @@
+ 
+ - 이름은 F2 스키마(WorkBrief, kmdb_matched, sources)와 R3 화면(#45)의 타입을 따랐다.
+ - 관람등급은 상세에 넣지 않고 API-003(다음 PR)으로 따로 준다(KOBIS가 느려도 상세 화면을 막지 않게).
+-- 영화 이미지는 주소만 전달하고 파일은 저장하지 않는다(BR-01).
++- 포스터·스틸은 팀 결정으로 보여 주지 않고 KMDb 원문 링크(kmdb_url)로 안내한다(BR-01, #12).
+ """
+ 
+ from typing import Literal
+@@ -52,10 +52,10 @@ class WorkDetail(WorkSummary):
+ 
+     cast: list[str] = Field(max_length=5, description="주요 출연진 최대 5명(FR-103)")
+     synopsis: str | None = Field(default=None, description="KMDb 원문 줄거리")
+-    poster_url: str | None = Field(default=None, description="KMDb 포스터 주소(FR-104)")
+-    still_urls: list[str] = Field(default_factory=list, description="KMDb 스틸 주소(FR-104)")
+     trailer_url: str | None = Field(default=None, description="KMDb 예고편 링크(FR-105)")
+-    kmdb_url: str | None = Field(default=None, description="KMDb 작품 페이지")
++    kmdb_url: str | None = Field(
++        default=None, description="KMDb 원문 링크. 포스터·스틸은 여기서 본다(FR-104)"
++    )
+     locations: list[WorkLocation]
+     related: list[WorkBrief] = Field(max_length=5, description="비슷한 작품 최대 5편(FR-802)")
+     sources: list[SourceCard]
+diff --git a/backend/app/services/archive_service.py b/backend/app/services/archive_service.py
+index 1282acb..0d84605 100644
+--- a/backend/app/services/archive_service.py
++++ b/backend/app/services/archive_service.py
+@@ -98,9 +98,8 @@ class ArchiveService:
+             **_summary(row.work),
+             "cast": row.cast,
+             "synopsis": _text(kmdb.get("plot")),
+-            # 포스터·스틸·예고편 주소는 아직 배치가 저장하지 않는다(TBD-01, BR-01)
+-            "poster_url": None,
+-            "still_urls": [],
++            # 포스터·스틸은 팀 결정으로 보여 주지 않고 KMDb 원문 링크(kmdb_url)로 안내한다(#12).
++            # 예고편 주소는 아직 배치가 저장하지 않는다(TBD-01)
+             "trailer_url": None,
+             "kmdb_url": _text(kmdb.get("link")),
+             "locations": [
+diff --git a/backend/tests/test_archive_service_db.py b/backend/tests/test_archive_service_db.py
+index 70f7e27..ea321fb 100644
+--- a/backend/tests/test_archive_service_db.py
++++ b/backend/tests/test_archive_service_db.py
+@@ -113,7 +113,7 @@ def test_detail_matched_work() -> None:
+         assert d["cast"] == ["이 배우", "박배우", "최배우", "정배우", "강배우"]  # 최대 5명(FR-103)
+         assert d["synopsis"] == "가짜 줄거리"
+         assert d["kmdb_url"] == "https://example.org/k1"
+-        assert d["poster_url"] is None and d["still_urls"] == [] and d["trailer_url"] is None
++        assert "poster_url" not in d and "still_urls" not in d and d["trailer_url"] is None
+         locs = d["locations"]
+         assert [x["name"] for x in locs] == ["부두", "시장", "골목"]  # 좌표 있는 곳 먼저
+         assert locs[2] == {
+diff --git a/backend/tests/test_f1_api.py b/backend/tests/test_f1_api.py
+index 3faf726..6b6a67a 100644
+--- a/backend/tests/test_f1_api.py
++++ b/backend/tests/test_f1_api.py
+@@ -32,8 +32,6 @@ DETAIL = {
+     **SUMMARY,
+     "cast": ["설경구", "하지원"],
+     "synopsis": "가짜 줄거리",
+-    "poster_url": None,
+-    "still_urls": [],
+     "trailer_url": None,
+     "kmdb_url": None,
+     "locations": [
+-- 
+2.43.0
+
