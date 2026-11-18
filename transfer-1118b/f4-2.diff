@@ -1,0 +1,896 @@
+diff --git a/backend/app/data/search_templates.py b/backend/app/data/search_templates.py
+new file mode 100644
+index 0000000..809bdb8
+--- /dev/null
++++ b/backend/app/data/search_templates.py
+@@ -0,0 +1,306 @@
++"""검색 템플릿 T1~T4 (COMP-12 SearchTemplates, FR-404, ADR-010).
++
++조건에 맞는 템플릿 하나를 업무 계층(TemplateSearcher)이 고르고, 여기서는 정해 둔 SQL에 값만 넣는다.
++- 질의문은 모듈을 읽을 때 한 번 만들어 둔 상수다. 값은 모두 바인딩 매개변수($n)로 넘기고,
++  정렬은 템플릿마다 고정, 개수는 1~MAX_LIMIT으로 자른다. LLM 출력이 SQL 문장에 들어갈 길이 없다.
++- 공통 CTE matched: 작품·인물·장르·구·군·연도 조건을 통과한 (촬영지, 작품) 쌍.
++  조건이 없으면 None을 넘긴다. 좌표 없는 촬영지는 뺀다(FR-210).
++- 장르는 KMDb 장르 이름으로 받는다(장르 묶음을 펼치는 일은 업무 계층이 한다).
++- 기준점 좌표는 조회에만 쓰고 저장하지 않는다(BR-10).
++
++| 템플릿 | 조건 | 정렬 |
++| T1_FILTER | 기준 위치·이동 조건 없음 | 일치한 작품 수 많은 순 |
++| T2_NEAR_POINT | 기준점 반경 안(earth_box로 GiST 색인, earth_distance로 다시 자름) | 가까운 순 |
++| T3_NEAR_STATION | 역 미지정: station_walk_min ≤ N / 역 지정: station_time + station_walk_min ≤ N |
++|                 | | 걸리는 시간 짧은 순 |
++| T4_WORKS | 결과 유형이 작품 | 촬영지 수 많은 순 |
++"""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++from dataclasses import dataclass
++from typing import Literal
++
++import asyncpg
++
++MAX_LIMIT = 20  # FR-406
++
++
++@dataclass(frozen=True)
++class Conditions:
++    """matched CTE의 매개변수 $1~$6. None은 '조건 없음'."""
++
++    work_ids: Sequence[int] | None = None
++    person_ids: Sequence[int] | None = None
++    genres: Sequence[str] | None = None  # KMDb 장르
++    gus: Sequence[str] | None = None
++    year_from: int | None = None
++    year_to: int | None = None
++
++    def args(self) -> tuple[object, ...]:
++        def arr(v: Sequence[object] | None) -> list[object] | None:
++            return list(v) if v else None
++
++        return (
++            arr(self.work_ids),
++            arr(self.person_ids),
++            arr(self.genres),
++            arr(self.gus),
++            self.year_from,
++            self.year_to,
++        )
++
++
++@dataclass(frozen=True)
++class HitRow:
++    id: int
++    name: str
++    gu: str | None
++    lat: float
++    lon: float
++    station: str | None  # 가장 가까운 역 이름
++    walk_min: float | None  # 그 역에서 도보 분
++    work_count: int  # 조건에 맞는 작품 수
++    source_ids: tuple[str, ...]  # 조건에 맞는 촬영 기록의 출처
++    dist_m: float | None = None  # T2
++    travel_min: float | None = None  # T3
++
++
++@dataclass(frozen=True)
++class HitPage:
++    total: int  # limit 전 전체 수
++    rows: list[HitRow]
++
++
++@dataclass(frozen=True)
++class WorkRow:
++    id: int
++    title: str
++    release_year: int | None
++    kmdb_matched: bool
++    matches: bool = True  # 검색 조건을 통과한 작품인지
++
++
++@dataclass(frozen=True)
++class WorkHitRow:
++    id: int
++    title: str
++    release_year: int | None
++    location_count: int
++    source_ids: tuple[str, ...]
++
++
++@dataclass(frozen=True)
++class WorkPage:
++    total: int
++    rows: list[WorkHitRow]
++
++
++_MATCHED = """
++WITH matched AS (
++    SELECT s.location_id, s.work_id, s.source_id
++    FROM shooting s
++    JOIN work w     ON w.id = s.work_id
++    JOIN location l ON l.id = s.location_id
++    WHERE l.lat IS NOT NULL
++      AND ($1::int[]  IS NULL OR w.id = ANY($1::int[]))
++      AND ($2::int[]  IS NULL OR EXISTS (
++            SELECT 1 FROM work_person wp
++            WHERE wp.work_id = w.id AND wp.person_id = ANY($2::int[])))
++      AND ($3::text[] IS NULL OR w.genres && $3::text[])
++      AND ($4::text[] IS NULL OR l.gu = ANY($4::text[]))
++      AND ($5::int    IS NULL OR w.release_year >= $5)
++      AND ($6::int    IS NULL OR w.release_year <= $6)
++)"""
++
++_HITS = (
++    _MATCHED
++    + """,
++agg AS (
++    SELECT location_id, count(DISTINCT work_id) AS work_count,
++           array_agg(DISTINCT source_id::text) AS source_ids
++    FROM matched GROUP BY location_id
++)
++SELECT l.id, l.name, l.gu, l.lat, l.lon, l.station_walk_min, ns.name AS station,
++       a.work_count, a.source_ids, count(*) OVER () AS total,"""
++)
++_FROM = """
++FROM agg a
++JOIN location l ON l.id = a.location_id
++LEFT JOIN station ns ON ns.id = l.nearest_station_id"""
++
++T1_FILTER = (
++    _HITS
++    + """
++       NULL::float8 AS dist_m, NULL::float8 AS travel_min"""
++    + _FROM
++    + """
++ORDER BY a.work_count DESC, l.id
++LIMIT $7
++"""
++)
++
++# $7 위도, $8 경도, $9 반경(m)
++T2_NEAR_POINT = (
++    _HITS
++    + """
++       earth_distance(ll_to_earth($7, $8), ll_to_earth(l.lat, l.lon)) AS dist_m,
++       NULL::float8 AS travel_min"""
++    + _FROM
++    + """
++WHERE earth_box(ll_to_earth($7, $8), $9) @> ll_to_earth(l.lat, l.lon)
++  AND earth_distance(ll_to_earth($7, $8), ll_to_earth(l.lat, l.lon)) <= $9
++ORDER BY dist_m, l.id
++LIMIT $10
++"""
++)
++
++# $7 출발 역(None이면 아무 역에서 걸어서), $8 분. 출발 역과 최근접 역이 같으면 열차 시간은 0
++T3_NEAR_STATION = (
++    _HITS
++    + """
++       NULL::float8 AS dist_m,
++       (COALESCE(t.minutes, 0) + l.station_walk_min)::float8 AS travel_min"""
++    + _FROM
++    + """
++LEFT JOIN station_time t ON t.from_id = $7::text AND t.to_id = l.nearest_station_id
++WHERE l.nearest_station_id IS NOT NULL AND l.station_walk_min IS NOT NULL
++  AND ($7::text IS NULL OR t.minutes IS NOT NULL OR l.nearest_station_id = $7::text)
++  AND COALESCE(t.minutes, 0) + l.station_walk_min <= $8
++ORDER BY travel_min, l.id
++LIMIT $9
++"""
++)
++
++T4_WORKS = (
++    _MATCHED
++    + """
++SELECT w.id, w.title, w.release_year, count(DISTINCT m.location_id) AS location_count,
++       array_agg(DISTINCT m.source_id::text) AS source_ids, count(*) OVER () AS total
++FROM matched m
++JOIN work w ON w.id = m.work_id
++GROUP BY w.id
++ORDER BY location_count DESC, w.release_year DESC NULLS LAST, w.id
++LIMIT $7
++"""
++)
++
++# 결과 촬영지($7)의 작품 목록. 조건에 맞는 작품 먼저, 최근 작품 순
++WORKS_OF_HITS = (
++    _MATCHED
++    + """
++SELECT s.location_id, w.id, w.title, w.release_year, w.kmdb_id IS NOT NULL AS kmdb_matched,
++       EXISTS (SELECT 1 FROM matched m
++               WHERE m.location_id = s.location_id AND m.work_id = s.work_id) AS matches
++FROM (SELECT DISTINCT location_id, work_id FROM shooting WHERE location_id = ANY($7::int[])) s
++JOIN work w ON w.id = s.work_id
++ORDER BY s.location_id, matches DESC, w.release_year DESC NULLS LAST, w.id
++"""
++)
++
++TEMPLATES: dict[str, str] = {
++    "T1_FILTER": T1_FILTER,
++    "T2_NEAR_POINT": T2_NEAR_POINT,
++    "T3_NEAR_STATION": T3_NEAR_STATION,
++    "T4_WORKS": T4_WORKS,
++}
++
++_POINT: dict[str, str] = {
++    "station": "SELECT lat, lon FROM station WHERE id = $1",
++    "location": "SELECT lat, lon FROM location WHERE id::text = $1 AND lat IS NOT NULL",
++}
++
++_NEAREST_STATION = """
++SELECT id, earth_distance(ll_to_earth($1, $2), ll_to_earth(lat, lon)) AS dist_m
++FROM station ORDER BY dist_m, id LIMIT 1
++"""
++
++
++def _limit(limit: int) -> int:
++    return max(1, min(int(limit), MAX_LIMIT))
++
++
++def _page(rows: Sequence[asyncpg.Record]) -> HitPage:
++    def num(v: object) -> float | None:
++        return None if v is None else float(v)  # type: ignore[arg-type]
++
++    hits = [
++        HitRow(
++            id=r["id"],
++            name=r["name"],
++            gu=r["gu"],
++            lat=r["lat"],
++            lon=r["lon"],
++            station=r["station"],
++            walk_min=num(r["station_walk_min"]),
++            work_count=r["work_count"],
++            source_ids=tuple(sorted(r["source_ids"])),
++            dist_m=num(r["dist_m"]),
++            travel_min=num(r["travel_min"]),
++        )
++        for r in rows
++    ]
++    return HitPage(rows[0]["total"] if rows else 0, hits)
++
++
++async def t1_filter(conn: asyncpg.Connection, c: Conditions, limit: int) -> HitPage:
++    return _page(await conn.fetch(T1_FILTER, *c.args(), _limit(limit)))
++
++
++async def t2_near_point(
++    conn: asyncpg.Connection, c: Conditions, lat: float, lon: float, radius_m: float, limit: int
++) -> HitPage:
++    rows = await conn.fetch(
++        T2_NEAR_POINT, *c.args(), float(lat), float(lon), float(radius_m), _limit(limit)
++    )
++    return _page(rows)
++
++
++async def t3_near_station(
++    conn: asyncpg.Connection, c: Conditions, base_station: str | None, minutes: float, limit: int
++) -> HitPage:
++    rows = await conn.fetch(T3_NEAR_STATION, *c.args(), base_station, float(minutes), _limit(limit))
++    return _page(rows)
++
++
++async def t4_works(conn: asyncpg.Connection, c: Conditions, limit: int) -> WorkPage:
++    rows = await conn.fetch(T4_WORKS, *c.args(), _limit(limit))
++    hits = [
++        WorkHitRow(
++            r["id"],
++            r["title"],
++            r["release_year"],
++            r["location_count"],
++            tuple(sorted(r["source_ids"])),
++        )
++        for r in rows
++    ]
++    return WorkPage(rows[0]["total"] if rows else 0, hits)
++
++
++async def works_of_hits(
++    conn: asyncpg.Connection, c: Conditions, location_ids: Sequence[int]
++) -> dict[int, list[WorkRow]]:
++    found: dict[int, list[WorkRow]] = {i: [] for i in location_ids}
++    for r in await conn.fetch(WORKS_OF_HITS, *c.args(), list(location_ids)):
++        found[r["location_id"]].append(
++            WorkRow(r["id"], r["title"], r["release_year"], r["kmdb_matched"], r["matches"])
++        )
++    return found
++
++
++async def point(
++    conn: asyncpg.Connection, kind: Literal["station", "location"], ref_id: str
++) -> tuple[float, float] | None:
++    """기준점 좌표(역 또는 좌표가 있는 촬영지). 질의문은 종류별로 정해 둔 것 중에서만 고른다."""
++    r = await conn.fetchrow(_POINT[kind], ref_id)
++    return (r["lat"], r["lon"]) if r else None
++
++
++async def nearest_station(
++    conn: asyncpg.Connection, lat: float, lon: float
++) -> tuple[str, float] | None:
++    """기준점에서 가장 가까운 역과 직선거리(m). '여기서 지하철로 N분'의 출발 역을 정할 때 쓴다."""
++    r = await conn.fetchrow(_NEAREST_STATION, float(lat), float(lon))
++    return (r["id"], float(r["dist_m"])) if r else None
+diff --git a/backend/app/services/template_searcher.py b/backend/app/services/template_searcher.py
+new file mode 100644
+index 0000000..02d578c
+--- /dev/null
++++ b/backend/app/services/template_searcher.py
+@@ -0,0 +1,189 @@
++"""F4 검색 템플릿 실행 (COMP-06·12 TemplateSearcher, FR-404·406, ADR-010).
++
++확정된 조건(Filters)으로 템플릿 하나를 고르고 매개변수를 채운다. SQL은 app.data.search_templates에
++정해 둔 것만 쓴다(AI-REQ-05).
++
++| 기준 위치(anchor) | 이동 조건(travel) | 템플릿 |
++| 없음 | (무시) | T1_FILTER |
++| 아무 역(ref 없음) | N분(기본 10분) | T3_NEAR_STATION: 최근접 역에서 걸어서 N분 |
++| 역·장소·현재 위치 | 걸어서 N분 / 없음 | T2_NEAR_POINT: 반경 = N × 4000/60 ÷ 1.3 (없으면 1km) |
++| 역 | 도시철도 N분(기본 30분) | T3_NEAR_STATION: 그 역에서 열차 + 내려서 걷기 ≤ N |
++| 장소·현재 위치 | 도시철도 N분 | T3: 기준점의 최근접 역에서 출발, 그 역까지 걷는 시간을 N에서 뺌 |
++
++- 기준점: 장소면 그 촬영지 좌표, 역이면 역 좌표, 현재 위치면 요청으로 받은 base_point.
++  좌표는 조회에만 쓰고 로그·응답에 남기지 않는다(BR-10).
++- 결과 유형이 작품(T4)이면 search_works()를 쓴다. QuerySearcher.search()는 촬영지만 돌려줄 수
++  있어(QueryHit) 결과 유형과 관계없이 촬영지를 돌려준다.
++- 출처: 촬영 기록의 출처 + 좌표 출처(DATA-06) + 역 정보를 보여 주면 DATA-08 + KMDb 연결 작품이면
++  DATA-04.
++"""
++
++from __future__ import annotations
++
++from collections.abc import Callable
++from contextlib import AbstractAsyncContextManager
++from dataclasses import dataclass
++from typing import Literal
++
++import asyncpg
++
++from app.core.names import station_label
++from app.core.places import DEFAULT_RADIUS_M
++from app.data import db
++from app.data import search_templates as repo
++from app.services.map_service import KMDB_SOURCE, expand_genres
++from app.services.query_service import (
++    Filters,
++    QueryHit,
++    QueryInputError,
++    Ref,
++    SearchPage,
++    WorkBrief,
++)
++
++WALK_M_PER_MIN = 4000 / 60  # 도보 시속 4km(build-plan 5장 도보 규칙)
++DETOUR = 1.3  # 직선거리 → 걷는 거리
++DEFAULT_WALK_MIN = 10  # '역 근처'처럼 분을 말하지 않았을 때
++DEFAULT_SUBWAY_MIN = 30
++WORKS_PER_HIT = 5
++GEO_SOURCE = "DATA-06"
++STATION_SOURCE = "DATA-08"
++
++Connect = Callable[[], AbstractAsyncContextManager[asyncpg.Connection]]
++Template = Literal["T1_FILTER", "T2_NEAR_POINT", "T3_NEAR_STATION"]
++
++
++@dataclass(frozen=True)
++class Plan:
++    """고른 템플릿과, 기준점을 어디서 얻는지. 좌표 값은 담지 않는다."""
++
++    template: Template
++    point_from: Literal["station", "location", "current"] | None = None
++    point_ref: str | None = None
++    radius_m: float | None = None  # T2
++    minutes: float | None = None  # T3
++    base_station: str | None = None  # T3: 출발 역(없으면 아무 역)
++    via_nearest_station: bool = False  # T3: 기준점의 최근접 역을 출발 역으로
++
++
++def walk_radius_m(minutes: float) -> float:
++    return minutes * WALK_M_PER_MIN / DETOUR
++
++
++def walk_minutes(dist_m: float) -> float:
++    return dist_m * DETOUR / WALK_M_PER_MIN
++
++
++def plan(filters: Filters, *, has_base_point: bool) -> Plan:
++    """조건 → 템플릿(FR-404 표). DB 없이 정해진다."""
++    anchor, travel = filters.anchor, filters.travel
++    minutes = travel.max_min if travel and travel.max_min else None
++    if anchor is None:
++        return Plan("T1_FILTER")
++    if anchor.type == "current":
++        if not has_base_point:  # QueryService가 미리 빼지만 필터 패널 검색도 같은 길을 쓴다
++            return Plan("T1_FILTER")
++        source: tuple[Literal["station", "location", "current"], str | None] = ("current", None)
++    elif anchor.ref is None:
++        if anchor.type == "station":  # 아무 역에서 걸어서 N분
++            return Plan("T3_NEAR_STATION", minutes=minutes or DEFAULT_WALK_MIN)
++        return Plan("T1_FILTER")
++    else:
++        source = ("station" if anchor.type == "station" else "location", anchor.ref.id)
++    if travel and travel.mode == "subway":
++        minutes = minutes or DEFAULT_SUBWAY_MIN
++        if source[0] == "station":
++            return Plan("T3_NEAR_STATION", minutes=minutes, base_station=source[1])
++        return Plan("T3_NEAR_STATION", *source, minutes=minutes, via_nearest_station=True)
++    radius = walk_radius_m(minutes) if minutes else float(DEFAULT_RADIUS_M)
++    return Plan("T2_NEAR_POINT", *source, radius_m=radius)
++
++
++def _ids(refs: tuple[Ref, ...]) -> list[int] | None:
++    try:
++        return [int(r.id) for r in refs] or None
++    except ValueError:
++        raise QueryInputError("조건 값이 올바르지 않아요") from None
++
++
++def conditions(f: Filters) -> repo.Conditions:
++    return repo.Conditions(
++        work_ids=_ids(f.works),
++        person_ids=_ids(f.persons),
++        genres=expand_genres(f.genres) or None,
++        gus=list(f.districts) or None,
++        year_from=f.year_from,
++        year_to=f.year_to,
++    )
++
++
++def _hit(row: repo.HitRow, works: list[repo.WorkRow]) -> QueryHit:
++    shown = works[:WORKS_PER_HIT]
++    has_station = row.station is not None and row.walk_min is not None
++    sources = set(row.source_ids) | {GEO_SOURCE}
++    if has_station:
++        sources.add(STATION_SOURCE)
++    if any(w.kmdb_matched for w in shown):
++        sources.add(KMDB_SOURCE)
++    return QueryHit(
++        location_id=row.id,
++        name=row.name,
++        gu=row.gu,
++        lat=row.lat,
++        lon=row.lon,
++        works=tuple(WorkBrief(w.title, w.release_year) for w in shown),
++        station=station_label(row.station) if has_station else None,  # type: ignore[arg-type]
++        walk_min=max(1, round(row.walk_min)) if has_station else None,  # type: ignore[arg-type]
++        source_ids=tuple(sorted(sources)),
++    )
++
++
++class TemplateSearcher:
++    def __init__(self, connect: Connect = db.connection) -> None:
++        self._connect = connect
++
++    async def search(
++        self, filters: Filters, *, base_point: tuple[float, float] | None, limit: int
++    ) -> SearchPage:
++        p = plan(filters, has_base_point=base_point is not None)
++        c = conditions(filters)
++        async with self._connect() as conn:
++            page = await self._run(conn, p, c, base_point, limit)
++            if page is None or not page.rows:
++                return SearchPage(0, ())
++            works = await repo.works_of_hits(conn, c, [r.id for r in page.rows])
++        return SearchPage(page.total, tuple(_hit(r, works[r.id]) for r in page.rows))
++
++    async def search_works(self, filters: Filters, *, limit: int) -> repo.WorkPage:
++        """T4_WORKS: 조건에 맞는 작품을 촬영지 수 많은 순으로. 기준 위치·이동 조건은 쓰지 않는다."""
++        async with self._connect() as conn:
++            return await repo.t4_works(conn, conditions(filters), limit)
++
++    async def _run(
++        self,
++        conn: asyncpg.Connection,
++        p: Plan,
++        c: repo.Conditions,
++        base_point: tuple[float, float] | None,
++        limit: int,
++    ) -> repo.HitPage | None:
++        if p.template == "T1_FILTER":
++            return await repo.t1_filter(conn, c, limit)
++        point: tuple[float, float] | None = None
++        if p.point_from == "current":
++            point = base_point
++        elif p.point_from is not None and p.point_ref is not None:
++            point = await repo.point(conn, p.point_from, p.point_ref)
++        if p.template == "T2_NEAR_POINT":
++            if point is None or p.radius_m is None:  # 기준점이 없어진 경우(동기화로 삭제 등)
++                return None
++            return await repo.t2_near_point(conn, c, point[0], point[1], p.radius_m, limit)
++        minutes, base_station = p.minutes or 0.0, p.base_station
++        if p.via_nearest_station:
++            near = await repo.nearest_station(conn, *point) if point else None
++            if near is None:
++                return None
++            base_station, minutes = near[0], minutes - walk_minutes(near[1])
++            if minutes <= 0:  # 역까지 걷는 데 시간을 다 쓴다
++                return None
++        return await repo.t3_near_station(conn, c, base_station, minutes, limit)
+diff --git a/backend/tests/test_search_templates_db.py b/backend/tests/test_search_templates_db.py
+new file mode 100644
+index 0000000..8dacbe5
+--- /dev/null
++++ b/backend/tests/test_search_templates_db.py
+@@ -0,0 +1,213 @@
++"""검색 템플릿 T1~T4 DB 테스트 (FR-404, ADR-010·011). 스키마(db/init)를 적재한 '테스트 전용'
++DB가 있을 때만 돈다. 한 트랜잭션 안에서 표를 비우고 시험 데이터를 넣은 뒤 되돌린다.
++    CINELOCA_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_search_templates_db.py
++"""
++
++import asyncio
++import os
++from collections.abc import AsyncIterator, Awaitable, Callable
++from contextlib import asynccontextmanager
++
++import asyncpg
++import pytest
++
++from app.services.query_service import AnchorFilter, Filters, Ref, SearchPage, TravelFilter
++from app.services.template_searcher import TemplateSearcher
++
++DSN = os.environ.get("CINELOCA_TEST_DATABASE_URL")
++pytestmark = pytest.mark.skipif(not DSN, reason="CINELOCA_TEST_DATABASE_URL 없음")
++
++# 테스트 전용 가짜 데이터: 작품-촬영지-인물 연결과 좌표·소요시간은 실제 정보가 아니다
++FIXTURE = """
++INSERT INTO source (id, org, name, url, license, policy) VALUES
++ ('DATA-01', '시험', '영화 속 부산정보', 'https://example.org/1', '시험', 'STORE'),
++ ('DATA-02', '시험', '씨네맵', 'https://example.org/2', '시험', 'STORE');
++INSERT INTO station (id, name, line, lat, lon, gu) VALUES
++ ('119', '서면', '1호선', 35.1579, 129.0594, '부산진구'),
++ ('113', '부산', '1호선', 35.1152, 129.0422, '동구'),
++ ('203', '해운대', '2호선', 35.1634, 129.1586, '해운대구'),
++ ('209', '광안', '2호선', 35.1576, 129.1131, '수영구');
++INSERT INTO station_time (from_id, to_id, minutes) VALUES
++ ('119','113',12), ('113','119',12), ('119','203',28), ('203','119',28),
++ ('119','209',18), ('209','119',18), ('209','203',10), ('203','209',10);
++INSERT INTO location (id, name, name_norm, gu, lat, lon, nearest_station_id, station_walk_min)
++VALUES
++ (1, '해운대해수욕장', '해운대해수욕장', '해운대구', 35.1587, 129.1604, '203', 9),
++ (2, '광안리해수욕장', '광안리해수욕장', '수영구', 35.1532, 129.1186, '209', 11),
++ (3, '서면 젊음의거리', '서면젊음의거리', '부산진구', 35.1557, 129.0598, '119', 4),
++ (4, '영도대교', '영도대교', '영도구', 35.0950, 129.0368, '113', 31),
++ (5, '좌표 없는 곳', '좌표없는곳', NULL, NULL, NULL, NULL, NULL);
++INSERT INTO work (id, title, title_norm, release_year, genres, kmdb_id, source_id) VALUES
++ (1, '범죄도시', '범죄도시', 2017, '{범죄,액션}', 'K1', 'DATA-01'),
++ (2, '부산행', '부산행', 2016, '{액션,스릴러}', NULL, 'DATA-01'),
++ (3, '해운대', '해운대', 2009, '{드라마,재난}', NULL, 'DATA-02'),
++ (4, '친구', '친구', 2001, '{드라마}', NULL, 'DATA-02');
++INSERT INTO person (id, name) VALUES (1, '마동석'), (2, '윤제균');
++INSERT INTO work_person (work_id, person_id, role, ord) VALUES
++ (1, 1, 'actor', 1), (2, 1, 'actor', 2), (3, 2, 'director', 1);
++INSERT INTO shooting (work_id, location_id, source_id) VALUES
++ (1, 3, 'DATA-01'), (1, 2, 'DATA-01'), (2, 4, 'DATA-01'), (3, 1, 'DATA-02'),
++ (3, 2, 'DATA-02'), (3, 2, 'DATA-01'), (4, 4, 'DATA-02'), (4, 5, 'DATA-02');
++"""
++
++MA = Ref("1", "마동석")
++SEOMYEON = AnchorFilter("station", Ref("119", "서면역"))
++GWANGALLI = AnchorFilter("place", Ref("2", "광안리해수욕장"))
++
++
++@asynccontextmanager
++async def _borrow(conn: asyncpg.Connection) -> AsyncIterator[asyncpg.Connection]:
++    yield conn
++
++
++def run(body: Callable[[TemplateSearcher], Awaitable[None]]) -> None:
++    async def main() -> None:
++        conn = await asyncpg.connect(DSN)
++        tx = conn.transaction()
++        await tx.start()
++        try:
++            await conn.execute(
++                "TRUNCATE dict_entry, review_item, course_stop, course, photo, shooting,"
++                " work_person, person, work, location, station_time, station, source"
++                " RESTART IDENTITY CASCADE"
++            )
++            await conn.execute(FIXTURE)
++            await body(TemplateSearcher(lambda: _borrow(conn)))
++        finally:
++            await tx.rollback()
++            await conn.close()
++
++    asyncio.run(main())
++
++
++async def find(s: TemplateSearcher, base_point=None, limit=20, **kw: object) -> SearchPage:
++    return await s.search(Filters(**kw), base_point=base_point, limit=limit)  # type: ignore[arg-type]
++
++
++def ids(page: SearchPage) -> list[int]:
++    return [h.location_id for h in page.hits]
++
++
++def test_t1_orders_by_matched_work_count_and_skips_unlocated() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        page = await find(s)
++        assert page.total == 4 and ids(page) == [2, 4, 1, 3]  # 작품 2편인 곳 먼저, 5번은 좌표 없음
++        page = await find(s, limit=2)
++        assert page.total == 4 and ids(page) == [2, 4]
++
++    run(body)
++
++
++def test_t1_matched_conditions() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        assert ids(await find(s, persons=(MA,))) == [2, 3, 4]
++        assert ids(await find(s, works=(Ref("3", "해운대"), Ref("4", "친구")))) == [1, 2, 4]
++        assert ids(await find(s, genres=("재난",))) == [1, 2]  # 묶음 → KMDb 장르
++        assert ids(await find(s, districts=("수영구", "영도구"))) == [2, 4]
++        assert ids(await find(s, year_from=2010, year_to=2019)) == [2, 3, 4]
++        assert ids(await find(s, year_to=2005)) == [4]
++        # 조건은 한 작품이 모두 만족해야 한다: 마동석 + 2017년 → 범죄도시
++        assert ids(await find(s, persons=(MA,), year_from=2017)) == [2, 3]
++        page = await find(s, persons=(MA,), genres=("공포",))
++        assert (page.total, page.hits) == (0, ())
++
++    run(body)
++
++
++def test_hit_has_works_station_and_sources() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        hit = next(h for h in (await find(s, persons=(MA,))).hits if h.location_id == 2)
++        assert (hit.name, hit.gu, hit.lat, hit.lon) == (
++            "광안리해수욕장",
++            "수영구",
++            35.1532,
++            129.1186,
++        )
++        # 조건에 맞는 작품(범죄도시) 먼저, 같은 작품이 출처 두 곳에 있어도 한 번만
++        assert [(w.title, w.year) for w in hit.works] == [("범죄도시", 2017), ("해운대", 2009)]
++        assert (hit.station, hit.walk_min) == ("광안역", 11)
++        # 조건에 맞는 촬영 기록 출처 + 좌표(DATA-06) + 역(DATA-08) + KMDb 연결 작품(DATA-04)
++        assert hit.source_ids == ("DATA-01", "DATA-04", "DATA-06", "DATA-08")
++        hit = next(h for h in (await find(s)).hits if h.location_id == 4)
++        assert hit.source_ids == ("DATA-01", "DATA-02", "DATA-06", "DATA-08")
++
++    run(body)
++
++
++def test_t2_near_point_from_station_place_and_current_position() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        walk10 = TravelFilter("walk", 10)  # 반경 약 513m
++        assert ids(await find(s, anchor=SEOMYEON, travel=walk10)) == [3]
++        assert ids(await find(s, anchor=GWANGALLI, travel=walk10)) == [2]
++        # 광안리에서 해운대해수욕장까지 약 3.8km: 걸어서 60분(약 3.1km) 밖, 80분(약 4.1km) 안
++        assert ids(await find(s, anchor=GWANGALLI, travel=TravelFilter("walk", 60))) == [2]
++        assert ids(await find(s, anchor=GWANGALLI, travel=TravelFilter("walk", 80))) == [2, 1]
++        assert ids(await find(s, anchor=GWANGALLI)) == [2]  # 분을 말하지 않으면 1km
++        here = (35.1600, 129.1600)
++        page = await find(s, base_point=here, anchor=AnchorFilter("current"), travel=walk10)
++        assert ids(page) == [1]
++        page = await find(s, anchor=SEOMYEON, travel=walk10, persons=(Ref("2", "윤제균"),))
++        assert page.total == 0
++        gone = AnchorFilter("place", Ref("5", "좌표 없는 곳"))  # 기준점 좌표가 없으면 결과 없음
++        assert (await find(s, anchor=gone, travel=walk10)).total == 0
++
++    run(body)
++
++
++def test_t3_any_station_walk() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        any_station = AnchorFilter("station")
++        walk10 = TravelFilter("walk", 10)
++        assert ids(await find(s, anchor=any_station, travel=walk10)) == [3, 1]  # 4분, 9분
++        assert ids(await find(s, anchor=any_station, travel=TravelFilter("walk", 11))) == [3, 1, 2]
++        # 시연 질의: 마동석 나온 작품 촬영지 중 지하철역에서 걸어서 10분 안
++        assert ids(await find(s, anchor=any_station, travel=walk10, persons=(MA,))) == [3]
++
++    run(body)
++
++
++def test_t3_subway_from_named_station() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        async def within(minutes: int) -> list[int]:
++            travel = TravelFilter("subway", minutes)
++            return ids(await find(s, anchor=SEOMYEON, travel=travel))
++
++        assert await within(20) == [3]  # 같은 역: 열차 0분 + 도보 4분
++        assert await within(30) == [3, 2]  # 서면→광안 18분 + 도보 11분 = 29분
++        assert await within(45) == [3, 2, 1, 4]  # 해운대 28+9=37분, 부산 12+31=43분
++        # 소요시간 표에 없는 구간(부산→해운대)은 갈 수 없는 것으로 본다
++        busan = AnchorFilter("station", Ref("113", "부산역"))
++        assert ids(await find(s, anchor=busan, travel=TravelFilter("subway", 300))) == [3, 4]
++
++    run(body)
++
++
++def test_t3_subway_from_place_starts_at_its_nearest_station() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        # 광안리해수욕장 → 광안역 직선 약 700m = 걸어서 약 13.7분. 남은 시간으로 T3
++        async def within(minutes: int) -> list[int]:
++            travel = TravelFilter("subway", minutes)
++            return ids(await find(s, anchor=GWANGALLI, travel=travel))
++
++        assert await within(10) == []  # 역까지 걷는 데 다 쓴다
++        assert await within(30) == [2]  # 남은 16분: 광안역 도보 11분
++        assert await within(40) == [2, 1, 3]  # 남은 26분: 해운대 10+9, 서면 18+4
++
++    run(body)
++
++
++def test_t4_works_by_location_count() -> None:
++    async def body(s: TemplateSearcher) -> None:
++        page = await s.search_works(Filters(result_type="work"), limit=20)
++        assert page.total == 4
++        assert [(w.title, w.location_count) for w in page.rows] == [
++            ("범죄도시", 2),
++            ("해운대", 2),
++            ("부산행", 1),
++            ("친구", 1),  # 좌표 없는 촬영지는 세지 않는다
++        ]
++        assert page.rows[1].source_ids == ("DATA-01", "DATA-02")
++        page = await s.search_works(Filters(districts=("수영구",), persons=(MA,)), limit=1)
++        assert (page.total, [w.title for w in page.rows]) == (1, ["범죄도시"])
++
++    run(body)
+diff --git a/backend/tests/test_template_searcher.py b/backend/tests/test_template_searcher.py
+new file mode 100644
+index 0000000..133825c
+--- /dev/null
++++ b/backend/tests/test_template_searcher.py
+@@ -0,0 +1,164 @@
++"""TemplateSearcher 단위 테스트 (FR-404, ADR-010). DB 없이 템플릿 선택과 매개변수 바인딩만 본다."""
++
++import asyncio
++import logging
++import re
++from collections.abc import AsyncIterator
++from contextlib import asynccontextmanager
++
++import pytest
++
++from app.core.genres import GENRE_GROUPS
++from app.data import search_templates as repo
++from app.services.query_service import AnchorFilter, Filters, QueryInputError, Ref, TravelFilter
++from app.services.template_searcher import (
++    DEFAULT_SUBWAY_MIN,
++    DEFAULT_WALK_MIN,
++    Plan,
++    TemplateSearcher,
++    conditions,
++    plan,
++    walk_radius_m,
++)
++
++STATION = AnchorFilter("station", Ref("119", "서면역"))
++PLACE = AnchorFilter("place", Ref("7", "영도대교"))
++WALK10 = TravelFilter("walk", 10)
++SUBWAY20 = TravelFilter("subway", 20)
++
++
++def pick(anchor=None, travel=None, *, has_base_point=False, **kw) -> Plan:
++    return plan(Filters(anchor=anchor, travel=travel, **kw), has_base_point=has_base_point)
++
++
++def test_walk_radius_rule() -> None:
++    # 반경(m) = N × 4000/60 ÷ 1.3
++    assert walk_radius_m(10) == pytest.approx(512.82, abs=0.01)
++    assert walk_radius_m(30) == pytest.approx(1538.46, abs=0.01)
++
++
++def test_plan_without_anchor_is_t1() -> None:
++    assert pick() == Plan("T1_FILTER")
++    assert pick(travel=WALK10) == Plan("T1_FILTER")  # 기준 없는 이동 조건은 쓰지 않는다
++    assert pick(result_type="work") == Plan("T1_FILTER")  # 작품 결과는 search_works()가 맡는다
++
++
++def test_plan_any_station_is_t3_walk() -> None:
++    any_station = AnchorFilter("station")
++    assert pick(any_station, WALK10) == Plan("T3_NEAR_STATION", minutes=10)
++    assert pick(any_station) == Plan("T3_NEAR_STATION", minutes=DEFAULT_WALK_MIN)
++    assert pick(any_station, TravelFilter("walk")).minutes == DEFAULT_WALK_MIN
++
++
++def test_plan_walk_from_point_is_t2() -> None:
++    r10 = walk_radius_m(10)
++    assert pick(STATION, WALK10) == Plan("T2_NEAR_POINT", "station", "119", radius_m=r10)
++    assert pick(PLACE, WALK10) == Plan("T2_NEAR_POINT", "location", "7", radius_m=r10)
++    assert pick(PLACE) == Plan("T2_NEAR_POINT", "location", "7", radius_m=1000.0)  # 기본 1km
++    current = pick(AnchorFilter("current"), WALK10, has_base_point=True)
++    assert current == Plan("T2_NEAR_POINT", "current", None, radius_m=r10)
++
++
++def test_plan_subway_is_t3_from_station() -> None:
++    assert pick(STATION, SUBWAY20) == Plan("T3_NEAR_STATION", minutes=20, base_station="119")
++    assert pick(STATION, TravelFilter("subway")).minutes == DEFAULT_SUBWAY_MIN
++    # 장소·현재 위치에서 도시철도: 기준점의 최근접 역에서 출발
++    assert pick(PLACE, SUBWAY20) == Plan(
++        "T3_NEAR_STATION", "location", "7", minutes=20, via_nearest_station=True
++    )
++    assert pick(AnchorFilter("current"), SUBWAY20, has_base_point=True) == Plan(
++        "T3_NEAR_STATION", "current", None, minutes=20, via_nearest_station=True
++    )
++
++
++def test_plan_falls_back_to_t1_when_point_is_unknown() -> None:
++    assert pick(AnchorFilter("current"), WALK10, has_base_point=False) == Plan("T1_FILTER")
++    assert pick(AnchorFilter("place"), WALK10) == Plan("T1_FILTER")  # 고르기 전(ref 없음)
++
++
++def test_conditions_use_none_for_no_condition_and_expand_genre_groups() -> None:
++    assert conditions(Filters()).args() == (None, None, None, None, None, None)
++    f = Filters(
++        works=(Ref("3", "해운대"),),
++        persons=(Ref("12", "가"), Ref("15", "나")),
++        genres=("재난", "공포"),
++        districts=("해운대구",),
++        year_from=2000,
++        year_to=2010,
++    )
++    kmdb = sorted({*GENRE_GROUPS["재난"], *GENRE_GROUPS["공포"]})
++    assert conditions(f).args() == ([3], [12, 15], kmdb, ["해운대구"], 2000, 2010)
++    with pytest.raises(QueryInputError):
++        conditions(Filters(works=(Ref("3; DROP TABLE work", "x"),)))
++
++
++def test_templates_are_fixed_text_with_numbered_placeholders_only() -> None:
++    counts = {"T1_FILTER": 7, "T2_NEAR_POINT": 10, "T3_NEAR_STATION": 9, "T4_WORKS": 7}
++    for name, sql in {**repo.TEMPLATES, "WORKS": repo.WORKS_OF_HITS}.items():
++        assert "%" not in sql and "{" not in sql and "'" not in sql, name
++        used = {int(n) for n in re.findall(r"\$(\d+)", sql)}
++        assert used == set(range(1, counts.get(name, 7) + 1)), name
++        assert "l.lat IS NOT NULL" in sql  # 좌표 없는 촬영지 제외
++
++
++class RecordingConn:
++    """fetch·fetchrow가 받은 (질의문, 값)을 적어 둔다. 결과는 비어 있다."""
++
++    def __init__(self) -> None:
++        self.calls: list[tuple[str, tuple]] = []
++
++    async def fetch(self, sql: str, *args: object) -> list:
++        self.calls.append((sql, args))
++        return []
++
++    async def fetchrow(self, sql: str, *args: object) -> dict:
++        self.calls.append((sql, args))
++        return {"lat": 35.1, "lon": 129.0, "id": "119", "dist_m": 100.0}
++
++
++def run_search(filters: Filters, base_point=None, limit=20) -> RecordingConn:
++    conn = RecordingConn()
++
++    @asynccontextmanager
++    async def connect() -> AsyncIterator[RecordingConn]:
++        yield conn
++
++    page = asyncio.run(
++        TemplateSearcher(connect).search(filters, base_point=base_point, limit=limit)  # type: ignore[arg-type]
++    )
++    assert (page.total, page.hits) == (0, ())
++    return conn
++
++
++def test_values_reach_sql_only_as_bound_parameters(caplog: pytest.LogCaptureFixture) -> None:
++    hostile = "해운대구'; DROP TABLE location; --"
++    cases = [
++        (Filters(districts=(hostile,)), None, repo.T1_FILTER),
++        (Filters(districts=(hostile,), anchor=STATION, travel=WALK10), None, repo.T2_NEAR_POINT),
++        (Filters(districts=(hostile,), anchor=AnchorFilter("station"), travel=WALK10), None,
++         repo.T3_NEAR_STATION),
++        (Filters(anchor=AnchorFilter("station", Ref(hostile, "x")), travel=SUBWAY20), None,
++         repo.T3_NEAR_STATION),
++        (Filters(anchor=AnchorFilter("current"), travel=WALK10), (35.123456, 129.123456),
++         repo.T2_NEAR_POINT),
++    ]  # fmt: skip
++    fixed = {*repo.TEMPLATES.values(), repo.WORKS_OF_HITS, *repo._POINT.values()}
++    with caplog.at_level(logging.DEBUG):
++        for filters, base_point, expected in cases:
++            conn = run_search(filters, base_point)
++            sql, args = conn.calls[-1]
++            assert sql is expected
++            assert all(s in fixed and hostile not in s for s, _ in conn.calls)
++            flat = [x for a in args for x in (a if isinstance(a, list) else [a])]
++            if base_point is None:
++                assert hostile in flat
++            else:
++                assert args[6:9] == (35.123456, 129.123456, walk_radius_m(10))
++    # 기준점 좌표는 로그에 남기지 않는다(BR-10)
++    assert "35.123456" not in caplog.text and "129.123456" not in caplog.text
++
++
++def test_limit_is_clamped_to_allowed_range() -> None:
++    assert run_search(Filters(), limit=500).calls[-1][1][-1] == repo.MAX_LIMIT
++    assert run_search(Filters(), limit=0).calls[-1][1][-1] == 1
++    assert run_search(Filters(), limit=7).calls[-1][1][-1] == 7

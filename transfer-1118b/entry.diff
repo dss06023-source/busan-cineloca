@@ -1,28 +1,30 @@
 diff --git a/.env.example b/.env.example
-index b325756..83d5b90 100644
+index 250db63..46d148c 100644
 --- a/.env.example
 +++ b/.env.example
-@@ -22,6 +22,7 @@ KMDB_SERVICE_KEY=            # 한국영상자료원 KMDb
- JUSO_SEARCH_API_KEY=         # 행정안전부 주소 검색 API
+@@ -23,6 +23,7 @@ JUSO_SEARCH_API_KEY=         # 행정안전부 주소 검색 API
  JUSO_COORD_API_KEY=          # 행정안전부 좌표 제공 API
- KAKAO_REST_API_KEY=          # 카카오 로컬 REST 키(배치 전용). 주소가 없거나 동까지만 있는 촬영지 좌표 검색(#25). 응답은 저장하지 않음
+ KAKAO_REST_API_KEY=          # 카카오 로컬 REST 키(배치 전용). GEOCODE_KAKAO_KEYWORD=true일 때만 씀. 응답은 저장하지 않음
+ GEOCODE_KAKAO_KEYWORD=false  # true면 주소 없는·동까지만 있는 촬영지를 카카오 키워드 검색으로 찾음(#25). 약관 확인 전까지 false(ADR-006)
 +KMDB_CSV_PATH=               # KMDB_SERVICE_KEY가 없을 때 배치 매칭에 쓸 KMDb '영화기본정보' CSV 경로(선택)
  
  # ── 프론트엔드 ──
  VITE_KAKAO_JS_KEY=           # 카카오 JavaScript 키 (등록 도메인에서만 동작)
 diff --git a/backend/app/batch/__main__.py b/backend/app/batch/__main__.py
 new file mode 100644
-index 0000000..ceb4e78
+index 0000000..a329e75
 --- /dev/null
 +++ b/backend/app/batch/__main__.py
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,148 @@
 +"""C1 배치 실행: backend 폴더에서 python -m app.batch --once [--out 결과.json]
 +
 +환경변수 이름은 저장소 루트 .env.example과 같다. 저장소 루트 .env가 있으면 읽는다
 +(scripts/ai_smoke.py와 같음, 이미 있는 환경변수는 덮지 않음). 다른 파일은 --env-file로 준다.
 +  필수: DATABASE_URL, DATA_GO_KR_SERVICE_KEY
-+  좌표: JUSO_SEARCH_API_KEY·JUSO_COORD_API_KEY(정확한 주소), KAKAO_REST_API_KEY(주소가 없거나
-+        동까지만 있는 촬영지, #25). 없으면 그 좌표만 비워 두고 계속한다.
++  좌표: JUSO_SEARCH_API_KEY·JUSO_COORD_API_KEY(정확한 주소). 주소가 없거나 동까지만 있는
++        촬영지는 GEOCODE_KAKAO_KEYWORD=true이고 KAKAO_REST_API_KEY가 있을 때만 카카오 키워드
++        검색으로 찾는다(#25, 기본 끔 → 위치 미확인, ADR-006).
++        키가 없으면 그 좌표만 비워 두고 계속한다.
 +  매칭: KMDB_SERVICE_KEY. 없으면 KMDB_CSV_PATH('영화기본정보' CSV)로 매칭한다.
 +  선택: JUSO_BASE_URL(주소 API 주소를 바꿀 때)
 +정기 실행(FR-616)은 아직 없고 --once 수동 실행만 한다.
@@ -46,11 +48,12 @@ index 0000000..ceb4e78
 +import httpx
 +
 +from app.batch import job, kmdb
-+from app.batch.geocode import DEFAULT_BASE, JusoGeocoder, KakaoKeywordGeocoder
++from app.batch.geocode import DEFAULT_BASE, JusoGeocoder, keyword_geocoder
 +from app.support.privacy import install_privacy_log_filter
 +
 +log = logging.getLogger("app.batch")
 +REQUIRED = ("DATABASE_URL", "DATA_GO_KR_SERVICE_KEY")
++_TRUE = ("1", "true", "yes", "on")
 +_COMMENT = re.compile(r"(?:^|\s)#")
 +ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 +ENV_HINT = "저장소 루트의 .env.example을 복사해 .env를 만들고 값을 채우세요"
@@ -97,11 +100,8 @@ index 0000000..ceb4e78
 +        if skey and ckey
 +        else None
 +    )
-+    kakao = (
-+        KakaoKeywordGeocoder(http, _env(env, "KAKAO_REST_API_KEY"))
-+        if _env(env, "KAKAO_REST_API_KEY")
-+        else None
-+    )
++    keyword_on = _env(env, "GEOCODE_KAKAO_KEYWORD").lower() in _TRUE  # config.py와 같은 규칙
++    kakao = keyword_geocoder(http, keyword_on, _env(env, "KAKAO_REST_API_KEY"))
 +    source: kmdb.CandidateSource | None = None
 +    if _env(env, "KMDB_SERVICE_KEY"):
 +        source = kmdb.KmdbApi(http, _env(env, "KMDB_SERVICE_KEY"))
@@ -109,7 +109,9 @@ index 0000000..ceb4e78
 +        source = kmdb.KmdbCsv.load(_env(env, "KMDB_CSV_PATH"))
 +    if juso is None:
 +        log.warning("JUSO_SEARCH_API_KEY·JUSO_COORD_API_KEY가 없어 주소 좌표를 찾지 않습니다")
-+    if kakao is None:
++    if not keyword_on:
++        log.info("GEOCODE_KAKAO_KEYWORD가 꺼져 있어 주소 없는 촬영지는 위치 미확인으로 둡니다")
++    elif kakao is None:
 +        log.warning("KAKAO_REST_API_KEY가 없어 주소 없는 촬영지 좌표를 찾지 않습니다")
 +    if source is None:
 +        log.warning("KMDB_SERVICE_KEY·KMDB_CSV_PATH가 없어 KMDb 매칭을 하지 않습니다")
@@ -164,10 +166,10 @@ index 0000000..ceb4e78
 +    sys.exit(cli())
 diff --git a/backend/tests/test_batch_main.py b/backend/tests/test_batch_main.py
 new file mode 100644
-index 0000000..efa7a23
+index 0000000..7831904
 --- /dev/null
 +++ b/backend/tests/test_batch_main.py
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,82 @@
 +"""C1 배치 진입점 테스트 (#26, #39). 키 값은 가짜이고 실제 API를 부르지 않는다."""
 +
 +import logging
@@ -210,13 +212,22 @@ index 0000000..efa7a23
 +
 +def test_build_clients_warns_names_only(caplog) -> None:
 +    env = {"DATA_GO_KR_SERVICE_KEY": "D-SECRET", "KAKAO_REST_API_KEY": "K-SECRET"}
-+    with caplog.at_level(logging.WARNING, logger="app.batch"):
++    with caplog.at_level(logging.INFO, logger="app.batch"):
 +        c = build_clients(httpx.AsyncClient(), env)
-+    assert c.data_go_kr_key == "D-SECRET" and c.kakao is not None
++    assert c.data_go_kr_key == "D-SECRET"
++    assert c.kakao is None  # 키가 있어도 GEOCODE_KAKAO_KEYWORD 기본은 끔(ADR-006)
 +    assert c.juso is None and c.kmdb_source is None
 +    text = caplog.text
 +    assert "JUSO_SEARCH_API_KEY" in text and "KMDB_SERVICE_KEY" in text
++    assert "GEOCODE_KAKAO_KEYWORD" in text
 +    assert "SECRET" not in text
++
++
++def test_build_clients_kakao_only_when_flag_on() -> None:
++    http = httpx.AsyncClient()
++    on = {"DATA_GO_KR_SERVICE_KEY": "D", "GEOCODE_KAKAO_KEYWORD": "true"}
++    assert build_clients(http, {**on, "KAKAO_REST_API_KEY": "K"}).kakao is not None
++    assert build_clients(http, on).kakao is None  # 켜도 키가 없으면 없음
 +
 +
 +def test_setup_logging_hides_keys_and_quiets_httpx(capsys) -> None:

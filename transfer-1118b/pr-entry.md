@@ -10,15 +10,16 @@ FR-601~604, NFR-005, NFR-009, #39(로그 개인정보 가리기)
 - `backend/app/batch/__main__.py`: 배치 실행 진입점 `python -m app.batch --once [--out 결과.json] [--env-file 파일]`
   - 리뷰 요청대로 **로그 설정 뒤 `install_privacy_log_filter()`를 붙이고, httpx·httpcore 로그 수준을 WARNING**으로 올렸습니다(httpx가 serviceKey·confmKey가 든 URL을 INFO로 남기기 때문)
   - #26: 키가 없을 때 문구가 **저장소 루트 `.env.example`**을 가리킵니다. 표준 출력·오류와 `--out` 결과 파일은 **UTF-8**로 씁니다(Windows 콘솔·파일 한글 깨짐 방지)
+  - 카카오 키워드 좌표는 #57의 `GEOCODE_KAKAO_KEYWORD`(기본 false)가 true이고 `KAKAO_REST_API_KEY`가 있을 때만 켭니다(`keyword_geocoder`). 꺼져 있으면 '위치 미확인으로 둔다'는 안내만 남깁니다
   - 저장소 루트 `.env`가 있으면 읽습니다(`scripts/ai_smoke.py`와 같은 방식, 이미 있는 환경변수는 덮지 않음). 빠진 선택 키(주소·카카오·KMDb)는 이름만 경고하고 그 단계만 건너뜁니다
-  - 필수: `DATABASE_URL`, `DATA_GO_KR_SERVICE_KEY`. 선택: `JUSO_SEARCH_API_KEY`·`JUSO_COORD_API_KEY`, `KAKAO_REST_API_KEY`, `KMDB_SERVICE_KEY`(없으면 `KMDB_CSV_PATH`), `JUSO_BASE_URL`
+  - 필수: `DATABASE_URL`, `DATA_GO_KR_SERVICE_KEY`. 선택: `JUSO_SEARCH_API_KEY`·`JUSO_COORD_API_KEY`, `GEOCODE_KAKAO_KEYWORD`·`KAKAO_REST_API_KEY`, `KMDB_SERVICE_KEY`(없으면 `KMDB_CSV_PATH`), `JUSO_BASE_URL`
 - `.env.example`: `KMDB_CSV_PATH`(선택) 한 줄 추가
 - 끝나면 결과 JSON(run_id, 상태, 단계별 건수, 매칭 규칙별 건수)을 출력하고, 성공이면 종료 코드 0, 가드·실패면 1, 키 없음이면 2
 
 ## 테스트 방법과 결과
-- `cd backend && ruff check . && python -m pytest -q` → 340 passed, 25 skipped(DB 없이) / DB 포함 365 passed
-- 새 테스트 `test_batch_main.py`: `.env` 읽기(주석·따옴표·기존 값 유지), 키 없을 때 루트 `.env.example` 안내, 빠진 선택 키는 이름만 경고(값 미노출), **로그 설정 뒤 serviceKey·confmKey 값이 출력에 없고 httpx INFO 로그가 남지 않음**
-- 실제 실행: 클라우드에서 실제 원본으로 두 번 실행해 성공(건수는 #JOB_PR 본문 표)
+- `cd backend && ruff check . && python -m pytest -q` → 348 passed, 27 skipped(DB 없이) / DB 포함 375 passed
+- 새 테스트 `test_batch_main.py`: `.env` 읽기(주석·따옴표·기존 값 유지), 키 없을 때 루트 `.env.example` 안내, 빠진 선택 키는 이름만 경고(값 미노출), 카카오 키워드는 설정이 켜지고 키가 있을 때만, **로그 설정 뒤 serviceKey·confmKey 값이 출력에 없고 httpx INFO 로그가 남지 않음**
+- 실제 실행: 클라우드에서 실제 원본으로 세 번 실행해 모두 성공(건수는 #JOB_PR 본문 표, 3회차가 이 진입점의 기본값)
 
 ## 의존성·라이선스
 - [x] 새 의존성 없음
