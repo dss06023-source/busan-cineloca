@@ -1,0 +1,571 @@
+diff --git a/.env.example b/.env.example
+index df7deb6..6e8474f 100644
+--- a/.env.example
++++ b/.env.example
+@@ -21,6 +21,7 @@ DATA_GO_KR_SERVICE_KEY=      # 공공데이터포털 (부산영상위원회, 교
+ KMDB_SERVICE_KEY=            # 한국영상자료원 KMDb
+ JUSO_SEARCH_API_KEY=         # 행정안전부 주소 검색 API
+ JUSO_COORD_API_KEY=          # 행정안전부 좌표 제공 API
++KOBIS_API_KEY=               # 영화진흥위원회 KOBIS (관람등급 실시간 조회, 저장 금지). 비우면 등급 표시 안 함
+ 
+ # ── 프론트엔드 ──
+ VITE_KAKAO_JS_KEY=           # 카카오 JavaScript 키 (등록 도메인에서만 동작)
+diff --git a/backend/app/api/routers/works.py b/backend/app/api/routers/works.py
+index 0e0e410..b61f4d2 100644
+--- a/backend/app/api/routers/works.py
++++ b/backend/app/api/routers/works.py
+@@ -1,18 +1,18 @@
+-"""F1 작품 아카이브 API: API-001 목록·검색·정렬, API-002 상세 (FR-101~106)."""
++"""F1 작품 아카이브 API: API-001 목록·검색·정렬, API-002 상세, API-003 관람등급 (FR-101~107)."""
+ 
+ from typing import Annotated
+ 
+ from fastapi import APIRouter, Depends, Query
+ 
+ from app.api.errors import ERROR_RESPONSES, ApiError
+-from app.api.schemas.works import WorkDetail, WorkListResponse, WorkSort
+-from app.services.archive_service import PAGE_SIZE, ArchiveService
++from app.api.schemas.works import WorkDetail, WorkListResponse, WorkRating, WorkSort
++from app.services.archive_service import PAGE_SIZE, ArchiveService, default_rating_provider
+ 
+ router = APIRouter(prefix="/works", tags=["F1 작품"])
+ 
+ 
+ def get_archive_service() -> ArchiveService:
+-    return ArchiveService()
++    return ArchiveService(ratings=default_rating_provider())
+ 
+ 
+ Service = Annotated[ArchiveService, Depends(get_archive_service)]
+@@ -46,3 +46,17 @@ async def get_work(work_id: int, service: Service) -> WorkDetail:
+     if detail is None:
+         raise ApiError(404, "WORK_NOT_FOUND", "작품을 찾을 수 없습니다")
+     return WorkDetail.model_validate(detail)
++
++
++@router.get(
++    "/{work_id}/rating",
++    response_model=WorkRating,
++    responses=_NOT_FOUND,
++    summary="API-003 KOBIS 관람등급 실시간",
++)
++async def get_rating(work_id: int, service: Service) -> WorkRating:
++    """KOBIS를 3초 제한으로 부른다. 코드가 없거나 실패하면 rating=null(200)이다(FR-107)."""
++    rating = await service.get_rating(work_id)
++    if rating is None:
++        raise ApiError(404, "WORK_NOT_FOUND", "작품을 찾을 수 없습니다")
++    return WorkRating.model_validate(rating)
+diff --git a/backend/app/api/schemas/works.py b/backend/app/api/schemas/works.py
+index e7389cd..c2c63bb 100644
+--- a/backend/app/api/schemas/works.py
++++ b/backend/app/api/schemas/works.py
+@@ -1,7 +1,7 @@
+-"""F1 작품 아카이브 스키마: API-001 목록, API-002 상세 (FR-101~106·802).
++"""F1 작품 아카이브 스키마: API-001 목록, API-002 상세, API-003 관람등급 (FR-101~107·802).
+ 
+ - 이름은 F2 스키마(WorkBrief, kmdb_matched, sources)와 R3 화면(#45)의 타입을 따랐다.
+-- 관람등급은 상세에 넣지 않고 API-003(다음 PR)으로 따로 준다(KOBIS가 느려도 상세 화면을 막지 않게).
++- 관람등급은 상세에 넣지 않고 API-003으로 따로 준다(KOBIS가 느려도 상세 화면을 막지 않게).
+ - 영화 이미지는 주소만 전달하고 파일은 저장하지 않는다(BR-01).
+ """
+ 
+@@ -59,3 +59,10 @@ class WorkDetail(WorkSummary):
+     locations: list[WorkLocation]
+     related: list[WorkBrief] = Field(max_length=5, description="비슷한 작품 최대 5편(FR-802)")
+     sources: list[SourceCard]
++
++
++class WorkRating(BaseModel):
++    """API-003 응답. 등급을 알 수 없으면 rating=null, sources는 빈 목록(ERR-006)."""
++
++    rating: str | None = Field(default=None, examples=["15세이상관람가"])
++    sources: list[SourceCard]
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index ed763e4..019d079 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -10,6 +10,7 @@ class Settings:
+     database_url: str | None
+     log_dir: str | None = None  # 요청 로그 폴더(NFR-005). 비우면 파일로 남기지 않는다
+     log_level: str = "INFO"  # app 로거 수준. 콘솔이 시끄러우면 WARNING
++    kobis_api_key: str | None = None  # KOBIS 관람등급(API-003). 비우면 등급은 늘 null
+ 
+ 
+ @lru_cache
+@@ -18,4 +19,5 @@ def get_settings() -> Settings:
+         database_url=os.getenv("DATABASE_URL") or None,
+         log_dir=os.getenv("LOG_DIR") or None,
+         log_level=(os.getenv("LOG_LEVEL") or "INFO").upper(),
++        kobis_api_key=os.getenv("KOBIS_API_KEY") or None,
+     )
+diff --git a/backend/app/data/kobis.py b/backend/app/data/kobis.py
+new file mode 100644
+index 0000000..fc347a2
+--- /dev/null
++++ b/backend/app/data/kobis.py
+@@ -0,0 +1,48 @@
++"""KOBIS 관람등급 실시간 조회 (COMP-11 RatingProvider, API-003, FR-107, ADR-007).
++
++KOBIS는 실시간 사용만 허용한다. 응답 본문은 DB·캐시·파일·로그·픽스처 어디에도 남기지 않고
++등급 문자열 하나만 꺼내 돌려준다. 키가 든 URL과 응답 내용은 예외 메시지에 넣지 않는다.
++상세 화면을 막지 않게 재시도 없이 한 번만 부른다(제한 시간은 부르는 쪽이 정한다).
++"""
++
++from __future__ import annotations
++
++import httpx
++
++INFO_URL = "https://www.kobis.or.kr/kobisopenapi/webservice/rest/movie/searchMovieInfo.json"
++
++
++class RatingUnavailable(Exception):
++    """KOBIS 호출 실패·시간 초과·형식 오류(ERR-006). 메시지는 오류 종류뿐이다."""
++
++
++class KobisRatingProvider:
++    def __init__(self, key: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
++        self._key = key
++        self._transport = transport  # 테스트는 httpx.MockTransport를 넣는다
++
++    async def rating(self, movie_cd: str, timeout_s: float) -> str | None:
++        """영화 코드의 현재 관람등급. KOBIS에 없는 코드이거나 심의 정보가 없으면 None."""
++        params = {"key": self._key, "movieCd": movie_cd}
++        try:
++            async with httpx.AsyncClient(transport=self._transport, timeout=timeout_s) as http:
++                r = await http.get(INFO_URL, params=params)
++            if r.status_code != 200:
++                raise RatingUnavailable(f"HTTP {r.status_code}")
++            body = r.json()
++        except (httpx.HTTPError, ValueError) as e:
++            raise RatingUnavailable(type(e).__name__) from None
++        return parse_rating(body)
++
++
++def parse_rating(body: object) -> str | None:
++    if not isinstance(body, dict) or "faultInfo" in body:  # 잘못된 키·한도 초과는 200 + faultInfo
++        raise RatingUnavailable("fault")
++    try:
++        info = body["movieInfoResult"]["movieInfo"]
++        audits = info.get("audits") or []
++        # 재심의로 여러 건이면 마지막 심의 결과가 현재 등급이다
++        grade = audits[-1].get("watchGradeNm") if audits else None
++    except (KeyError, TypeError, AttributeError, IndexError):
++        raise RatingUnavailable("format") from None
++    return grade.strip() or None if isinstance(grade, str) else None
+diff --git a/backend/app/data/works.py b/backend/app/data/works.py
+index cf2213e..98425e7 100644
+--- a/backend/app/data/works.py
++++ b/backend/app/data/works.py
+@@ -1,8 +1,9 @@
+-"""작품 조회 (COMP-12 WorkRepository, F1 작품 FR-101~106·802, API-001·002).
++"""작품 조회 (COMP-12 WorkRepository, F1 작품 FR-101~107·802, API-001~003).
+ 
+ - 모든 값은 바인딩 매개변수로 넘기고, 정렬은 허용 목록(_ORDER)에서만 고른다(ADR-010).
+ - 검색어는 정규화한 작품명(title_norm)과 감독·배우 이름에서 찾는다(FR-102).
+ - KMDb 저장본(work.kmdb)은 배치가 넣은 그대로 돌려준다. 꺼내 쓰는 일은 업무 계층이 한다.
++- KOBIS는 영화 코드만 읽는다. 등급은 저장하지 않는다(FR-107, ADR-007).
+ """
+ 
+ from __future__ import annotations
+@@ -159,3 +160,9 @@ async def get(conn: asyncpg.Connection, work_id: int) -> WorkDetailRow | None:
+ async def similar(conn: asyncpg.Connection, work_id: int, n: int = 5) -> list[WorkBriefRow]:
+     rows = await conn.fetch(_SIMILAR, work_id, n)
+     return [WorkBriefRow(r["id"], r["title"], r["release_year"]) for r in rows]
++
++
++async def kobis_code(conn: asyncpg.Connection, work_id: int) -> tuple[bool, str | None]:
++    """(작품이 있는지, KOBIS 영화 코드). 코드는 db/init/04의 열이다."""
++    r = await conn.fetchrow("SELECT kobis_movie_cd FROM work WHERE id = $1", work_id)
++    return (False, None) if r is None else (True, r["kobis_movie_cd"])
+diff --git a/backend/app/services/archive_service.py b/backend/app/services/archive_service.py
+index 1282acb..1b0bc07 100644
+--- a/backend/app/services/archive_service.py
++++ b/backend/app/services/archive_service.py
+@@ -1,32 +1,53 @@
+-"""F1 작품 아카이브 업무 로직 (COMP-03 ArchiveService, FR-101~106·802, API-001·002).
++"""F1 작품 아카이브 업무 로직 (COMP-03 ArchiveService, FR-101~107·802, API-001~003).
+ 
+ - 목록: 검색어를 배치와 같은 규칙(norm)으로 정규화해 작품명·감독·배우에서 찾는다(FR-101·102).
+ - 상세: DB에 있는 값만 돌려준다. KMDb 저장본(work.kmdb)에 없는 항목은 null·빈 목록이다(FR-103~106).
+-- 출처 카드(FR-704): 작품·촬영 기록의 출처, KMDb 연결 작품이면 KMDb.
++- 관람등급: KOBIS를 3초 제한으로 실시간 조회하고 저장하지 않는다. 코드가 없거나 실패·시간 초과면
++  rating=null이라 상세 화면을 막지 않는다(FR-107, ERR-006).
++- 출처 카드(FR-704): 작품·촬영 기록의 출처, KMDb 연결 작품이면 KMDb, 등급을 보여 주면 KOBIS.
+ - 결과는 API 응답 형식의 dict로 돌려준다(라우터가 응답 모델로 검증한다).
+-관람등급(API-003)은 다음 PR에서 더한다. AI 작품 소개(API-004)는 work_intro.py가 맡는다.
++AI 작품 소개(API-004)는 work_intro.py가 맡는다.
+ """
+ 
+ from __future__ import annotations
+ 
++import asyncio
++import logging
++import time
+ from collections.abc import Callable, Iterable
+ from contextlib import AbstractAsyncContextManager
+-from typing import Any
++from typing import Any, Protocol
+ 
+ import asyncpg
+ 
++from app.core.config import get_settings
+ from app.core.names import norm  # work.title_norm을 만든 정규화 규칙(FR-602)
+ from app.core.places import DISTRICT_CENTERS
+ from app.data import db, locations
+ from app.data import works as repo
++from app.data.kobis import KobisRatingProvider, RatingUnavailable
++
++logger = logging.getLogger(__name__)
+ 
+ PAGE_SIZE = 20  # FR-101: 한 쪽에 20편
+ RELATED_LIMIT = 5  # FR-802
++RATING_TIMEOUT_S = 3.0  # FR-107
+ KMDB_SOURCE = "DATA-04"
++KOBIS_SOURCE = "DATA-05"
+ 
+ Connect = Callable[[], AbstractAsyncContextManager[asyncpg.Connection]]
+ 
+ 
++class RatingProvider(Protocol):
++    async def rating(self, movie_cd: str, timeout_s: float) -> str | None: ...
++
++
++def default_rating_provider() -> RatingProvider | None:
++    """KOBIS_API_KEY가 있을 때만 실제 KOBIS를 부른다. 없으면 등급은 늘 null."""
++    key = get_settings().kobis_api_key
++    return KobisRatingProvider(key) if key else None
++
++
+ def _summary(w: repo.WorkRow) -> dict[str, Any]:
+     return {
+         "id": w.id,
+@@ -52,8 +73,11 @@ async def _cards(conn: asyncpg.Connection, ids: Iterable[str]) -> list[dict[str,
+ 
+ 
+ class ArchiveService:
+-    def __init__(self, connect: Connect = db.connection) -> None:
++    def __init__(
++        self, connect: Connect = db.connection, ratings: RatingProvider | None = None
++    ) -> None:
+         self._connect = connect
++        self._ratings = ratings
+ 
+     async def list_works(
+         self,
+@@ -119,3 +143,32 @@ class ArchiveService:
+             ],
+             "sources": cards,
+         }
++
++    async def get_rating(self, work_id: int) -> dict[str, Any] | None:
++        """API-003. 없는 id면 None. KOBIS 응답은 등급 문자열만 쓰고 어디에도 남기지 않는다."""
++        async with self._connect() as conn:
++            found, movie_cd = await repo.kobis_code(conn, work_id)
++        if not found:
++            return None
++        rating = await self._live_rating(movie_cd) if movie_cd and self._ratings else None
++        if rating is None:
++            return {"rating": None, "sources": []}
++        async with self._connect() as conn:
++            return {"rating": rating, "sources": await _cards(conn, [KOBIS_SOURCE])}
++
++    async def _live_rating(self, movie_cd: str) -> str | None:
++        assert self._ratings is not None
++        started = time.monotonic()
++        try:
++            return await asyncio.wait_for(
++                self._ratings.rating(movie_cd, RATING_TIMEOUT_S), timeout=RATING_TIMEOUT_S
++            )
++        except (RatingUnavailable, asyncio.TimeoutError) as e:
++            # ERR-006: 공급자·오류 종류·걸린 시간만 남긴다(응답 본문·키·URL은 남기지 않는다)
++            latency_ms = round((time.monotonic() - started) * 1000)
++            logger.warning(
++                "KOBIS 등급 조회 실패 provider=kobis error=%s latency_ms=%d",
++                type(e).__name__,
++                latency_ms,
++            )
++            return None
+diff --git a/backend/tests/test_archive_service_db.py b/backend/tests/test_archive_service_db.py
+index 70f7e27..6030866 100644
+--- a/backend/tests/test_archive_service_db.py
++++ b/backend/tests/test_archive_service_db.py
+@@ -1,6 +1,6 @@
+-"""ArchiveService·WorkRepository DB 테스트 (FR-101~106·802, API-001·002).
++"""ArchiveService·WorkRepository DB 테스트 (FR-101~107·802, API-001~003).
+ 
+-스키마(db/init)를 적재한 '테스트 전용' DB가 있을 때만 돈다. 한 트랜잭션 안에서 표를 비우고
++스키마(db/init 01~04)를 적재한 '테스트 전용' DB가 있을 때만 돈다. 한 트랜잭션 안에서 표를 비우고
+ 시험 데이터를 넣은 뒤 끝나면 되돌리므로 기존 데이터는 바뀌지 않는다.
+     CINELOCA_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_archive_service_db.py
+ """
+@@ -23,16 +23,17 @@ FIXTURE = """
+ INSERT INTO source (id, org, name, url, license, policy) VALUES
+  ('DATA-01', '부산영상위원회', '영화 속 부산정보', 'https://example.org/1', '제한 없음', 'STORE'),
+  ('DATA-02', '부산영상위원회', '씨네맵', 'https://example.org/2', '제한 없음', 'STORE'),
+- ('DATA-04', '한국영상자료원', 'KMDb', 'https://example.org/4', '시험', 'STORE');
++ ('DATA-04', '한국영상자료원', 'KMDb', 'https://example.org/4', '시험', 'STORE'),
++ ('DATA-05', '영화진흥위원회', 'KOBIS', 'https://example.org/5', '저장 금지', 'ID_ONLY');
+ INSERT INTO work (id, title, title_norm, release_year, genres, kmdb_id, kmdb, match_status,
+-                  source_id) VALUES
++                  source_id, kobis_movie_cd) VALUES
+  (1, '부산 항구', '부산항구', 2018, '{범죄,액션}', 'K1',
+   '{"plot": "가짜 줄거리", "keywords": ["항구"], "link": "https://example.org/k1",
+     "source_id": "DATA-04"}',
+-  'matched', 'DATA-01'),
+- (2, '옛날 드라마', '옛날드라마', 2001, '{}', NULL, NULL, 'unmatched', 'DATA-02'),
+- (3, '웃긴 영화', '웃긴영화', 2010, '{코메디}', 'K3', NULL, 'matched', 'DATA-01'),
+- (4, '가나다', '가나다', NULL, '{범죄}', 'K4', NULL, 'matched', 'DATA-01');
++  'matched', 'DATA-01', '20990001'),
++ (2, '옛날 드라마', '옛날드라마', 2001, '{}', NULL, NULL, 'unmatched', 'DATA-02', NULL),
++ (3, '웃긴 영화', '웃긴영화', 2010, '{코메디}', 'K3', NULL, 'matched', 'DATA-01', NULL),
++ (4, '가나다', '가나다', NULL, '{범죄}', 'K4', NULL, 'matched', 'DATA-01', NULL);
+ INSERT INTO person (id, name) VALUES (1, '김감독'), (2, '이 배우'), (3, '박배우'), (4, '최배우'),
+  (5, '정배우'), (6, '강배우'), (7, '조배우');
+ INSERT INTO work_person (work_id, person_id, role, ord) VALUES
+@@ -47,6 +48,11 @@ INSERT INTO shooting (work_id, location_id, source_id) VALUES
+ """
+ 
+ 
++class Ratings:
++    async def rating(self, movie_cd: str, timeout_s: float) -> str | None:
++        return f"등급({movie_cd})"
++
++
+ @asynccontextmanager
+ async def _borrow(conn: asyncpg.Connection) -> AsyncIterator[asyncpg.Connection]:
+     yield conn
+@@ -63,7 +69,7 @@ def run(body: Callable[[ArchiveService], Awaitable[None]]) -> None:
+                 " work, location, station_time, station, source RESTART IDENTITY CASCADE"
+             )
+             await conn.execute(FIXTURE)
+-            await body(ArchiveService(connect=lambda: _borrow(conn)))
++            await body(ArchiveService(connect=lambda: _borrow(conn), ratings=Ratings()))
+         finally:
+             await tx.rollback()
+             await conn.close()
+@@ -140,3 +146,14 @@ def test_detail_unmatched_and_missing() -> None:
+         assert await svc.get_work(999) is None
+ 
+     run(body)
++
++
++def test_rating_reads_code_only() -> None:
++    async def body(svc: ArchiveService) -> None:
++        ok = await svc.get_rating(1)
++        assert ok is not None and ok["rating"] == "등급(20990001)"
++        assert [s["id"] for s in ok["sources"]] == ["DATA-05"]
++        assert await svc.get_rating(2) == {"rating": None, "sources": []}  # 코드 없음
++        assert await svc.get_rating(999) is None
++
++    run(body)
+diff --git a/backend/tests/test_f1_api.py b/backend/tests/test_f1_api.py
+index 3faf726..12acfe7 100644
+--- a/backend/tests/test_f1_api.py
++++ b/backend/tests/test_f1_api.py
+@@ -1,16 +1,22 @@
+-"""F1 API 계층 테스트 (API-001·002, FR-101~106). DB 없이 가짜 서비스로 형식·오류만 본다.
++"""F1 API 계층 테스트 (API-001~003, FR-101~107). DB·KOBIS 없이 가짜 서비스로 형식·오류만 본다.
+ 
+ 실제 조회는 test_archive_service_db.py(테스트 DB가 있을 때)에서 확인한다.
+ """
+ 
+-from collections.abc import Iterator
++import asyncio
++from collections.abc import AsyncIterator, Iterator
++from contextlib import asynccontextmanager
+ from typing import Any
+ 
+ import pytest
+ from fastapi.testclient import TestClient
+ 
+ from app.api.routers.works import get_archive_service
++from app.data import locations
++from app.data import works as repo
++from app.data.kobis import RatingUnavailable
+ from app.main import create_app
++from app.services.archive_service import ArchiveService
+ 
+ SOURCE = {
+     "id": "DATA-01",
+@@ -57,6 +63,9 @@ class FakeArchiveService:
+     async def get_work(self, work_id: int) -> dict[str, Any] | None:
+         return DETAIL if work_id == 11 else None
+ 
++    async def get_rating(self, work_id: int) -> dict[str, Any] | None:
++        return {"rating": None, "sources": []} if work_id == 11 else None
++
+ 
+ @pytest.fixture
+ def fake() -> FakeArchiveService:
+@@ -99,8 +108,16 @@ def test_detail_shape(client: TestClient) -> None:
+     assert "rating" not in body  # 등급은 API-003으로 따로 받는다
+ 
+ 
+-def test_unknown_work_uses_error_format(client: TestClient) -> None:
+-    res = client.get("/api/works/999")
++def test_rating_null_is_200(client: TestClient) -> None:
++    res = client.get("/api/works/11/rating")
++
++    assert res.status_code == 200
++    assert res.json() == {"rating": None, "sources": []}
++
++
++@pytest.mark.parametrize("path", ["/api/works/999", "/api/works/999/rating"])
++def test_unknown_work_uses_error_format(client: TestClient, path: str) -> None:
++    res = client.get(path)
+ 
+     assert res.status_code == 404
+     assert res.json()["error"]["code"] == "WORK_NOT_FOUND"
+@@ -109,4 +126,64 @@ def test_unknown_work_uses_error_format(client: TestClient) -> None:
+ def test_openapi_lists_f1_endpoints(client: TestClient) -> None:
+     paths = client.get("/openapi.json").json()["paths"]
+ 
+-    assert {"/api/works", "/api/works/{work_id}"} <= set(paths)
++    assert {"/api/works", "/api/works/{work_id}", "/api/works/{work_id}/rating"} <= set(paths)
++
++
++# ── get_rating: KOBIS 실패가 상세 화면을 막지 않는다(FR-107, ERR-006). DB는 가짜로 바꾼다 ──
++
++
++class FakeRatings:
++    def __init__(self, result: str | None | Exception | float) -> None:
++        self.result, self.codes = result, []
++
++    async def rating(self, movie_cd: str, timeout_s: float) -> str | None:
++        self.codes.append(movie_cd)
++        if isinstance(self.result, Exception):
++            raise self.result
++        if isinstance(self.result, float):
++            await asyncio.sleep(self.result)
++            return "늦은 답"
++        return self.result
++
++
++@asynccontextmanager
++async def _no_conn() -> AsyncIterator[None]:
++    yield None
++
++
++def rating_of(monkeypatch, ratings: FakeRatings | None, code: str | None = "20990001", found=True):
++    async def kobis_code(_conn, _work_id):
++        return found, code
++
++    async def sources(_conn, ids):
++        return [
++            locations.SourceRow(i, "영화진흥위원회", "KOBIS 영화정보", "https://kobis", None)
++            for i in ids
++        ]
++
++    monkeypatch.setattr(repo, "kobis_code", kobis_code)
++    monkeypatch.setattr(locations, "sources", sources)
++    monkeypatch.setattr("app.services.archive_service.RATING_TIMEOUT_S", 0.05)
++    return asyncio.run(ArchiveService(connect=_no_conn, ratings=ratings).get_rating(1))
++
++
++def test_rating_ok_has_kobis_source(monkeypatch) -> None:
++    ratings = FakeRatings("15세이상관람가")
++    result = rating_of(monkeypatch, ratings)
++
++    assert result["rating"] == "15세이상관람가" and ratings.codes == ["20990001"]
++    assert [s["id"] for s in result["sources"]] == ["DATA-05"]  # 출처 카드(FR-704)
++
++
++@pytest.mark.parametrize("result", [RatingUnavailable("HTTP 500"), 1.0, None])
++def test_rating_failure_or_timeout_is_null(monkeypatch, result) -> None:
++    assert rating_of(monkeypatch, FakeRatings(result)) == {"rating": None, "sources": []}
++
++
++def test_rating_without_code_or_key_does_not_call_kobis(monkeypatch) -> None:
++    ratings = FakeRatings("전체관람가")
++
++    assert rating_of(monkeypatch, ratings, code=None) == {"rating": None, "sources": []}
++    assert rating_of(monkeypatch, None) == {"rating": None, "sources": []}  # KOBIS_API_KEY 없음
++    assert rating_of(monkeypatch, ratings, found=False) is None  # 없는 작품 → 404
++    assert ratings.codes == []
+diff --git a/backend/tests/test_kobis.py b/backend/tests/test_kobis.py
+new file mode 100644
+index 0000000..bf75484
+--- /dev/null
++++ b/backend/tests/test_kobis.py
+@@ -0,0 +1,65 @@
++"""KOBIS 관람등급 클라이언트 테스트 (FR-107, ERR-006). 실제 KOBIS는 부르지 않는다.
++
++응답은 손으로 만든 가짜다(KOBIS 응답 본문은 저장 금지라 실제 사본을 두지 않는다).
++"""
++
++import asyncio
++
++import httpx
++import pytest
++
++from app.data.kobis import KobisRatingProvider, RatingUnavailable, parse_rating
++
++FAKE_KEY = "fake-kobis-key"
++
++
++def info(audits: list[dict] | None, movie_cd: str | None = "20990001") -> dict:
++    return {"movieInfoResult": {"movieInfo": {"movieCd": movie_cd, "audits": audits}}}
++
++
++def rating_with(handler) -> str | None:
++    provider = KobisRatingProvider(FAKE_KEY, transport=httpx.MockTransport(handler))
++    return asyncio.run(provider.rating("20990001", 3.0))
++
++
++def test_rating_sends_code_and_returns_latest_grade() -> None:
++    seen: list[httpx.Request] = []
++
++    def handler(req: httpx.Request) -> httpx.Response:
++        seen.append(req)
++        audits = [{"watchGradeNm": "12세이상관람가"}, {"watchGradeNm": "15세이상관람가"}]
++        return httpx.Response(200, json=info(audits))
++
++    assert rating_with(handler) == "15세이상관람가"  # 재심의면 마지막 결과
++    assert seen[0].url.params["movieCd"] == "20990001"
++    assert seen[0].url.params["key"] == FAKE_KEY
++
++
++@pytest.mark.parametrize("body", [info([]), info(None, movie_cd=None), info([{"auditNo": "1"}])])
++def test_no_grade_is_none(body: dict) -> None:
++    assert parse_rating(body) is None
++
++
++@pytest.mark.parametrize(
++    "response",
++    [
++        httpx.Response(500, text="oops"),
++        httpx.Response(200, text="<html>점검 중</html>"),
++        httpx.Response(200, json={"faultInfo": {"errorCode": "320010", "message": "키 오류"}}),
++        httpx.Response(200, json={"movieInfoResult": None}),
++    ],
++)
++def test_failures_raise_without_leaking_key_or_body(response: httpx.Response) -> None:
++    with pytest.raises(RatingUnavailable) as e:
++        rating_with(lambda _req: response)
++
++    assert FAKE_KEY not in str(e.value) and "키 오류" not in str(e.value)
++    assert e.value.__cause__ is None  # 키가 든 URL을 가진 원래 예외를 붙이지 않는다
++
++
++def test_timeout_raises() -> None:
++    def handler(req: httpx.Request) -> httpx.Response:
++        raise httpx.ReadTimeout("timeout", request=req)
++
++    with pytest.raises(RatingUnavailable, match="ReadTimeout"):
++        rating_with(handler)
+diff --git a/db/init/04_f1_works.sql b/db/init/04_f1_works.sql
+new file mode 100644
+index 0000000..fe59228
+--- /dev/null
++++ b/db/init/04_f1_works.sql
+@@ -0,0 +1,10 @@
++-- F1 작품 API (API-001~003) 보충: KOBIS 영화 코드 열과 KOBIS 출처 (SDD 3.5 work.kobis_movie_cd, FR-107)
++--
++-- KOBIS는 실시간 사용만 허용한다(ADR-007). 영화 코드만 저장하고(ID_ONLY) 응답 본문은 어디에도 두지 않는다.
++-- 코드는 아직 배치가 채우지 않는다. 비어 있으면 API-003은 rating=null을 돌려준다.
++
++ALTER TABLE work ADD COLUMN IF NOT EXISTS kobis_movie_cd VARCHAR(10);
++
++INSERT INTO source (id, org, name, url, license, policy) VALUES
++ ('DATA-05', '영화진흥위원회', 'KOBIS 영화정보', 'https://www.kobis.or.kr/kobisopenapi', '실시간 사용만 허용, 복제·저장·재전송 금지', 'ID_ONLY')
++ON CONFLICT (id) DO NOTHING;
