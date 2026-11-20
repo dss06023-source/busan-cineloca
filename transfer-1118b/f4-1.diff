@@ -1,0 +1,987 @@
+diff --git a/backend/app/batch/kmdb.py b/backend/app/batch/kmdb.py
+index 0adea17..819a2d6 100644
+--- a/backend/app/batch/kmdb.py
++++ b/backend/app/batch/kmdb.py
+@@ -33,6 +33,7 @@ import httpx
+ from rapidfuzz import fuzz, process
+ 
+ from app.batch.merge import norm, year_of
++from app.core.names import TV_PREFIXES, split_media  # 머리말 규칙은 조회(F4 사전)와 같이 쓴다
+ 
+ AUTO, REVIEW = 0.9, 0.6
+ TIE_GAP = 0.05
+@@ -41,13 +42,6 @@ SHORT_MIN = 40
+ API_URL = "https://api.koreafilm.or.kr/openapi-data2/wisenut/search_api/search_json2.jsp"
+ DETAIL_URL = "https://www.kmdb.or.kr/db/kor/detail/movie/{kind}/{no}"
+ _HL = re.compile(r"\s*!H[SE]\s*")
+-TV_PREFIXES = ("JTBC", "KBS", "MBC", "SBS", "tvN", "OCN", "ENA", "EBS", "TV조선", "MBN", "채널A")
+-OTT_PREFIXES = (
+-    "넷플릭스", "디즈니+", "티빙", "왓챠", "쿠팡플레이", "카카오TV", "애플TV+", "아마존 프라임",
+-    "웨이브", "시즌",
+-)  # fmt: skip
+-MEDIA_PREFIXES = TV_PREFIXES + OTT_PREFIXES
+-_MEDIA = re.compile(r"^(" + "|".join(re.escape(m) for m in MEDIA_PREFIXES) + r")\s+(.+)$")
+ 
+ 
+ @dataclass(frozen=True)
+@@ -74,12 +68,6 @@ class CandidateSource(Protocol):
+     async def candidates(self, title: str) -> list[Candidate]: ...
+ 
+ 
+-def split_media(title: str) -> tuple[str, str | None]:
+-    """'JTBC 나의 해방일지' → ('나의 해방일지', 'JTBC'). 머리말이 없으면 (title, None)."""
+-    m = _MEDIA.match(" ".join(title.split()))
+-    return (m.group(2), m.group(1)) if m else (title, None)
+-
+-
+ def cand_year(c: Candidate) -> int | None:
+     return year_of(c.rel_date) or year_of(c.prod_year)
+ 
+diff --git a/backend/app/core/names.py b/backend/app/core/names.py
+index 4e19642..121d430 100644
+--- a/backend/app/core/names.py
++++ b/backend/app/core/names.py
+@@ -2,6 +2,8 @@
+ 
+ 배치(병합)와 조회(F1 작품 검색, F4 EntityResolver)가 같은 함수를 써야 같은 이름이 같은 키가 된다.
+ PoC p2_analyze.py의 규칙을 그대로 옮겼다.
++
++방송사·OTT 머리말('JTBC ', '넷플릭스 ')을 떼는 규칙도 KMDb 매칭(배치)과 F4 사전이 같이 쓴다.
+ """
+ 
+ import re
+@@ -14,3 +16,24 @@ def norm(s: str | None) -> str:
+     """작품명·장소명 비교용: 괄호 안 부가설명·공백·문장부호를 빼고 소문자로."""
+     s = _BRACKETS.sub("", (s or "").strip())
+     return _PUNCT.sub("", s).lower()
++
++
++def station_label(name: str) -> str:
++    """역 이름을 화면에 쓰는 꼴로: '서면' → '서면역', '벡스코(시립미술관)' → '벡스코역'."""
++    bare = _BRACKETS.sub("", name).strip() or name
++    return bare if bare.endswith("역") else bare + "역"
++
++
++TV_PREFIXES = ("JTBC", "KBS", "MBC", "SBS", "tvN", "OCN", "ENA", "EBS", "TV조선", "MBN", "채널A")
++OTT_PREFIXES = (
++    "넷플릭스", "디즈니+", "티빙", "왓챠", "쿠팡플레이", "카카오TV", "애플TV+", "아마존 프라임",
++    "웨이브", "시즌",
++)  # fmt: skip
++MEDIA_PREFIXES = TV_PREFIXES + OTT_PREFIXES
++_MEDIA = re.compile(r"^(" + "|".join(re.escape(m) for m in MEDIA_PREFIXES) + r")\s+(.+)$")
++
++
++def split_media(title: str) -> tuple[str, str | None]:
++    """'JTBC 나의 해방일지' → ('나의 해방일지', 'JTBC'). 머리말이 없으면 (title, None)."""
++    m = _MEDIA.match(" ".join(title.split()))
++    return (m.group(2), m.group(1)) if m else (title, None)
+diff --git a/backend/app/data/dictionary.py b/backend/app/data/dictionary.py
+new file mode 100644
+index 0000000..6f1e983
+--- /dev/null
++++ b/backend/app/data/dictionary.py
+@@ -0,0 +1,240 @@
++"""고유명사 사전 (COMP-12 dict_entry, FR-403). F4 사전 대조가 쓴다.
++
++- rebuild(): 지식베이스(작품·인물·역)와 구·군 목록에서 dict_entry를 다시 맞춘다.
++  동기화 반영(staging.publish)과 같은 트랜잭션에서 부른다. 바뀌지 않은 행은 그대로 두어
++  embedding 값이 남는다(임베딩 채우기는 FR-617 작업).
++- lookup(): 정확 일치 → 트라이그램 상위 3개(0.35 이상) → 임베딩 코사인 0.75 이상 순으로 찾는다.
++  임베딩 보완은 질의 벡터를 받았을 때만 한다.
++- 표기(surface)는 저장할 때와 찾을 때 모두 app.core.names.norm으로 정규화한다
++  ('마 동석' → '마동석'). work.title_norm·location.name_norm과 같은 규칙이다.
++- 값은 모두 바인딩 매개변수로 넘긴다(ADR-010).
++"""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++from dataclasses import dataclass
++from typing import Literal
++
++import asyncpg
++
++from app.core.names import norm, split_media
++from app.core.places import DISTRICT_CENTERS
++
++Kind = Literal["work", "person", "district", "station"]
++TargetKind = Literal["work", "person", "station", "location"]
++
++TRIGRAM_MIN = 0.35  # SDD 부록 B 초기값(평가셋으로 확정)
++EMBEDDING_MIN = 0.75
++TOP_K = 3
++
++
++@dataclass(frozen=True)
++class Match:
++    canonical_id: str
++    surface: str
++    score: float  # 정확 일치 1.0, 트라이그램 유사도, 코사인 유사도
++    via: Literal["exact", "trigram", "embedding"]
++
++
++@dataclass(frozen=True)
++class Target:
++    """표준 값 하나의 이름과 구분용 정보(고르기 라벨에 쓴다)."""
++
++    id: str
++    name: str
++    detail: str | None = None  # 작품: 개봉연도, 인물: 대표 작품, 역: 호선, 촬영지: 구·군
++
++
++def district_surfaces() -> list[tuple[str, str]]:
++    """(표기, 구·군 이름). '해운대구'와 '해운대'. '구'를 떼면 한 글자인 곳은 긴 이름만."""
++    out: list[tuple[str, str]] = []
++    for name in DISTRICT_CENTERS:
++        out.append((name, name))
++        if len(name) > 2:
++            out.append((name[:-1], name))
++    return out
++
++
++def station_surfaces(name: str) -> list[str]:
++    """'서면' → ['서면', '서면역'], '부산역' → ['부산역', '부산']."""
++    bare = name[:-1] if name.endswith("역") and len(name) > 1 else name
++    return [bare, bare + "역"]
++
++
++async def _entries(conn: asyncpg.Connection) -> set[tuple[str, str, str]]:
++    out: set[tuple[str, str, str]] = set()
++
++    def add(kind: Kind, surface: str, canonical_id: object) -> None:
++        if s := norm(surface):
++            out.add((kind, s, str(canonical_id)))
++
++    for r in await conn.fetch("SELECT id, title FROM work"):
++        add("work", r["title"], r["id"])
++        add("work", split_media(r["title"])[0], r["id"])  # 'JTBC 나의 해방일지' → '나의 해방일지'
++    for r in await conn.fetch(
++        "SELECT p.id, p.name FROM person p"
++        " WHERE EXISTS (SELECT 1 FROM work_person wp WHERE wp.person_id = p.id)"
++    ):
++        add("person", r["name"], r["id"])
++    for r in await conn.fetch("SELECT id, name FROM station"):
++        for surface in station_surfaces(r["name"]):
++            add("station", surface, r["id"])
++    for surface, name in district_surfaces():
++        add("district", surface, name)
++    return out
++
++
++async def rebuild(conn: asyncpg.Connection) -> dict[str, int]:
++    """dict_entry를 지식베이스에 맞춘다. 호출하는 쪽이 트랜잭션을 연다. 종류별 행 수를 돌려준다."""
++    entries = sorted(await _entries(conn))
++    kinds = [e[0] for e in entries]
++    surfaces = [e[1] for e in entries]
++    ids = [e[2] for e in entries]
++    await conn.execute(
++        """
++        DELETE FROM dict_entry d
++        WHERE NOT EXISTS (
++            SELECT 1 FROM unnest($1::text[], $2::text[], $3::text[]) AS n(kind, surface, cid)
++            WHERE n.kind = d.kind AND n.surface = d.surface AND n.cid = d.canonical_id)
++        """,
++        kinds,
++        surfaces,
++        ids,
++    )
++    await conn.execute(
++        """
++        INSERT INTO dict_entry (kind, surface, canonical_id)
++        SELECT n.kind, n.surface, n.cid
++        FROM unnest($1::text[], $2::text[], $3::text[]) AS n(kind, surface, cid)
++        WHERE NOT EXISTS (
++            SELECT 1 FROM dict_entry d
++            WHERE d.kind = n.kind AND d.surface = n.surface AND d.canonical_id = n.cid)
++        """,
++        kinds,
++        surfaces,
++        ids,
++    )
++    rows = await conn.fetch("SELECT kind, count(*) AS n FROM dict_entry GROUP BY kind")
++    return {r["kind"]: r["n"] for r in rows}
++
++
++_EXACT = """
++SELECT DISTINCT canonical_id, surface FROM dict_entry
++WHERE kind = $1 AND surface = $2
++ORDER BY canonical_id
++"""
++
++# 한 표준 값에 표기가 여럿이면(머리말 뗀 제목, 'X역') 가장 비슷한 표기 하나만 남긴다
++_TRIGRAM = """
++SELECT canonical_id, surface, score FROM (
++    SELECT DISTINCT ON (canonical_id) canonical_id, surface, similarity(surface, $2) AS score
++    FROM dict_entry
++    WHERE kind = $1 AND similarity(surface, $2) >= $3
++    ORDER BY canonical_id, similarity(surface, $2) DESC, surface
++) t
++ORDER BY score DESC, canonical_id
++LIMIT $4
++"""
++
++_EMBEDDING = """
++SELECT canonical_id, surface, score FROM (
++    SELECT DISTINCT ON (canonical_id) canonical_id, surface,
++           1 - (embedding <=> $2::text::vector) AS score
++    FROM dict_entry
++    WHERE kind = $1 AND embedding IS NOT NULL
++      AND 1 - (embedding <=> $2::text::vector) >= $3
++    ORDER BY canonical_id, embedding <=> $2::text::vector, surface
++) t
++ORDER BY score DESC, canonical_id
++LIMIT $4
++"""
++
++_PLACE_EXACT = """
++SELECT id::text AS canonical_id, name_norm AS surface FROM location
++WHERE name_norm = $1 AND lat IS NOT NULL
++"""
++
++# 기준 장소는 줄여 부르는 일이 많아('광안리' ↔ '광안리해수욕장') 낱말 유사도도 같이 본다
++_PLACE_TRIGRAM = """
++SELECT id::text AS canonical_id, name_norm AS surface,
++       greatest(similarity(name_norm, $1), word_similarity($1, name_norm)) AS score
++FROM location
++WHERE lat IS NOT NULL
++  AND greatest(similarity(name_norm, $1), word_similarity($1, name_norm)) >= $2
++ORDER BY score DESC, length(name_norm), id
++LIMIT $3
++"""
++
++
++def _vector_text(vec: Sequence[float]) -> str:
++    return "[" + ",".join(repr(float(x)) for x in vec) + "]"
++
++
++def _matches(rows: Sequence[asyncpg.Record], via: str) -> list[Match]:
++    return [
++        Match(r["canonical_id"], r["surface"], float(r["score"]) if via != "exact" else 1.0, via)  # type: ignore[arg-type]
++        for r in rows
++    ]
++
++
++async def lookup(
++    conn: asyncpg.Connection,
++    kind: Kind,
++    text: str,
++    limit: int = TOP_K,
++    *,
++    query_vec: Sequence[float] | None = None,
++) -> list[Match]:
++    """이름 하나의 후보(점수 높은 순). 정확히 같은 표기가 있으면 그것만(동명이면 모두) 돌려준다."""
++    q = norm(text)
++    if not q:
++        return []
++    if rows := await conn.fetch(_EXACT, kind, q):
++        return _matches(rows, "exact")
++    if rows := await conn.fetch(_TRIGRAM, kind, q, TRIGRAM_MIN, limit):
++        return _matches(rows, "trigram")
++    if query_vec is None:
++        return []
++    rows = await conn.fetch(_EMBEDDING, kind, _vector_text(query_vec), EMBEDDING_MIN, limit)
++    return _matches(rows, "embedding")
++
++
++async def has_embeddings(conn: asyncpg.Connection, kind: Kind) -> bool:
++    """임베딩 보완을 할 수 있는지(그 종류에 embedding이 채워진 행이 있는지)."""
++    return await conn.fetchval(
++        "SELECT EXISTS (SELECT 1 FROM dict_entry WHERE kind = $1 AND embedding IS NOT NULL)", kind
++    )
++
++
++async def lookup_place(conn: asyncpg.Connection, text: str, limit: int = TOP_K) -> list[Match]:
++    """기준 장소(anchor place) 후보: 좌표가 있는 촬영지를 이름으로 찾는다."""
++    q = norm(text)
++    if not q:
++        return []
++    if rows := await conn.fetch(_PLACE_EXACT, q):
++        return _matches(rows, "exact")
++    return _matches(await conn.fetch(_PLACE_TRIGRAM, q, TRIGRAM_MIN, limit), "trigram")
++
++
++_DESCRIBE: dict[str, str] = {
++    "work": "SELECT id::text AS id, title AS name, release_year::text AS detail"
++    " FROM work WHERE id::text = ANY($1::text[])",
++    # 동명이인 구분: 가장 최근 작품 제목
++    "person": "SELECT p.id::text AS id, p.name,"
++    " (SELECT w.title FROM work_person wp JOIN work w ON w.id = wp.work_id"
++    "  WHERE wp.person_id = p.id ORDER BY w.release_year DESC NULLS LAST, w.id LIMIT 1) AS detail"
++    " FROM person p WHERE p.id::text = ANY($1::text[])",
++    "station": "SELECT id::text AS id, name, line AS detail"
++    " FROM station WHERE id = ANY($1::text[])",
++    "location": "SELECT id::text AS id, name, gu AS detail"
++    " FROM location WHERE id::text = ANY($1::text[])",
++}
++
++
++async def describe(
++    conn: asyncpg.Connection, kind: TargetKind, ids: Sequence[str]
++) -> dict[str, Target]:
++    """표준 ID → 이름. 질의문은 종류별로 정해 둔 것 중에서만 고른다."""
++    rows = await conn.fetch(_DESCRIBE[kind], list(ids))
++    return {r["id"]: Target(r["id"], r["name"], r["detail"]) for r in rows}
+diff --git a/backend/app/data/staging.py b/backend/app/data/staging.py
+index 91fc51a..52e716e 100644
+--- a/backend/app/data/staging.py
++++ b/backend/app/data/staging.py
+@@ -5,6 +5,7 @@
+ - publish(): 가드 통과 뒤 같은 트랜잭션에서 서비스 테이블로 반영
+   (sync_record.guard_and_publish가 부른다).
+   id는 정규화 이름으로 찾아 유지하고, 이번 수집에 없는 작품·촬영지는 지운다.
++  끝에 고유명사 사전(dict_entry, FR-403)을 새 작품·역에 맞춘다.
+ - 이전 반영 결과 읽기: 좌표 캐시(같은 주소면 다시 부르지 않음), 관리자 검수 결과
+ """
+ 
+@@ -14,6 +15,8 @@ from collections.abc import Iterable
+ 
+ import asyncpg
+ 
++from app.data import dictionary
++
+ logger = logging.getLogger(__name__)
+ 
+ STG_TABLES = ("stg.shooting", "stg.work", "stg.location", "stg.station")
+@@ -196,3 +199,5 @@ async def publish(conn: asyncpg.Connection) -> None:
+                             AND r.proposer = 'rule')
+         """
+     )
++    # F4 사전 대조(FR-403)가 새 작품·역 이름을 바로 찾게 사전을 같은 트랜잭션에서 맞춘다
++    await dictionary.rebuild(conn)
+diff --git a/backend/app/services/entity_resolver.py b/backend/app/services/entity_resolver.py
+new file mode 100644
+index 0000000..0e16a1c
+--- /dev/null
++++ b/backend/app/services/entity_resolver.py
+@@ -0,0 +1,204 @@
++"""F4 사전 대조 (COMP-06·12 DictionaryResolver, FR-403, UC-05 4·4a·4b).
++
++AI가 뽑은 조건(QueryConditions)의 이름을 지식베이스 표준 값(Ref)으로 바꾼다.
++- 작품·인물·역: dict_entry에서 정확 일치 → 트라이그램 0.35 이상 상위 3개(app.data.dictionary).
++- 기준 장소(anchor place): 좌표가 있는 촬영지 이름에서 찾는다. 없으면 역 이름으로도 찾아 본다
++  ('부산역 근처'를 AI가 장소로 뽑는 경우).
++- 후보가 여럿(같은 이름이 여러 개이거나 1등과 점수 차 0.05 안)이면 고르지 않고 Choice로 묻는다.
++- 사전에 없는 이름은 조건에서 빼고 unknown으로 알린다. 기준 위치를 못 찾으면 이동 조건도 뺀다.
++- 장르·구·군·연도·결과 유형은 AI 출력 스키마가 이미 허용 값만 통과시키므로 그대로 옮긴다.
++- 역 이름 없이 '역에서 걸어서 N분'이면 '아무 역'(AnchorFilter(type='station', ref=None))이다.
++"""
++
++from __future__ import annotations
++
++import logging
++from collections.abc import Awaitable, Callable, Sequence
++from contextlib import AbstractAsyncContextManager
++from typing import Literal, Protocol
++
++import asyncpg
++
++from app.core.names import station_label
++from app.data import db, dictionary
++from app.data.ai_gateway.tasks import QueryConditions
++from app.data.dictionary import Match, Target, TargetKind
++from app.services.query_service import (
++    AnchorFilter,
++    Choice,
++    Filters,
++    Option,
++    QueryInputError,
++    Ref,
++    Resolution,
++    TravelFilter,
++)
++
++logger = logging.getLogger(__name__)
++
++TIE_GAP = 0.05  # 1등과 이 안이면 같은 후보로 보고 사용자에게 묻는다
++MAX_OPTIONS = 3
++
++Connect = Callable[[], AbstractAsyncContextManager[asyncpg.Connection]]
++Embed = Callable[[str], Awaitable[Sequence[float]]]
++ChoiceKey = Literal["works", "persons", "anchor"]
++
++
++class DictionarySource(Protocol):
++    """사전 조회. 테스트는 가짜를 넣는다."""
++
++    async def lookup(self, kind: dictionary.Kind, text: str) -> list[Match]: ...
++
++    async def lookup_place(self, text: str) -> list[Match]: ...
++
++    async def describe(self, kind: TargetKind, ids: Sequence[str]) -> dict[str, Target]: ...
++
++
++class PgDictionary:
++    """app.data.dictionary를 DB 연결에 붙인다. embed가 있으면 트라이그램으로 못 찾은 이름을
++    임베딩으로 한 번 더 찾는다(코사인 0.75, embedding이 채워진 행이 있을 때만)."""
++
++    def __init__(self, connect: Connect = db.connection, *, embed: Embed | None = None) -> None:
++        self._connect = connect
++        self._embed = embed
++
++    async def lookup(self, kind: dictionary.Kind, text: str) -> list[Match]:
++        async with self._connect() as conn:
++            found = await dictionary.lookup(conn, kind, text)
++            if found or self._embed is None or not await dictionary.has_embeddings(conn, kind):
++                return found
++        try:
++            vec = await self._embed(text)
++        except Exception:  # 임베딩이 안 되면 보완 없이 '사전에 없음'으로 둔다
++            logger.warning("사전 대조 임베딩 실패 kind=%s", kind)
++            return []
++        async with self._connect() as conn:
++            return await dictionary.lookup(conn, kind, text, query_vec=vec)
++
++    async def lookup_place(self, text: str) -> list[Match]:
++        async with self._connect() as conn:
++            return await dictionary.lookup_place(conn, text)
++
++    async def describe(self, kind: TargetKind, ids: Sequence[str]) -> dict[str, Target]:
++        async with self._connect() as conn:
++            return await dictionary.describe(conn, kind, ids)
++
++
++def candidates(matches: Sequence[Match]) -> list[Match]:
++    """1등과 점수 차 0.05 안인 후보(표준 값마다 하나). 하나면 확정, 둘 이상이면 고르기."""
++    best = max((m.score for m in matches), default=0.0)
++    out: dict[str, Match] = {}
++    for m in sorted(matches, key=lambda m: -m.score):
++        if best - m.score <= TIE_GAP:
++            out.setdefault(m.canonical_id, m)
++    return list(out.values())[:MAX_OPTIONS]
++
++
++def display_name(kind: TargetKind, target: Target) -> str:
++    return station_label(target.name) if kind == "station" else target.name
++
++
++def label(kind: TargetKind, target: Target) -> str:
++    """고르기 옵션 라벨. 예: '친구 (2001)', '서면역 (1호선)', '영도대교 (영도구)'."""
++    name = display_name(kind, target)
++    return f"{name} ({target.detail})" if target.detail else name
++
++
++def _unique(names: Sequence[str]) -> list[str]:
++    return list(dict.fromkeys(n.strip() for n in names if n and n.strip()))
++
++
++class DictionaryResolver:
++    def __init__(self, source: DictionarySource | None = None) -> None:
++        self._source = source or PgDictionary()
++
++    async def resolve(self, conditions: QueryConditions) -> Resolution:
++        c = conditions
++        choices: list[Choice] = []
++        unknown: list[str] = []
++
++        async def refs(key: ChoiceKey, kind: TargetKind, names: Sequence[str]) -> tuple[Ref, ...]:
++            found: dict[str, Ref] = {}
++            for name in _unique(names):
++                got = await self._one(key, kind, name, await self._source.lookup(kind, name))  # type: ignore[arg-type]
++                if isinstance(got, Ref):
++                    found.setdefault(got.id, got)
++                elif got is None:
++                    unknown.append(name)
++                else:
++                    choices.append(got)
++            return tuple(found.values())
++
++        works = await refs("works", "work", c.work_titles)
++        persons = await refs("persons", "person", c.persons)
++
++        anchor: AnchorFilter | None = None
++        if c.anchor is not None:
++            name = (c.anchor.name or "").strip()
++            if c.anchor.type == "current":
++                anchor = AnchorFilter("current")
++            elif c.anchor.type == "station" and not name:
++                anchor = AnchorFilter("station")  # 아무 역
++            elif name:
++                anchor = await self._anchor(c.anchor.type, name, choices, unknown)
++        travel = TravelFilter(c.travel.mode, c.travel.max_min) if c.travel and anchor else None
++
++        filters = Filters(
++            works=works,
++            persons=persons,
++            genres=tuple(dict.fromkeys(c.genres)),
++            districts=tuple(dict.fromkeys(c.districts)),
++            year_from=c.release_year_from,
++            year_to=c.release_year_to,
++            anchor=anchor,
++            travel=travel,
++            result_type=c.result_type,
++        )
++        return Resolution(filters, tuple(choices), tuple(unknown))
++
++    async def pick(self, choice: Choice, option_id: str) -> Ref:
++        if option_id not in {o.id for o in choice.options}:
++            raise QueryInputError("고를 수 없는 항목이에요")
++        kind, _, cid = option_id.partition(":")
++        target = (await self._source.describe(kind, [cid])).get(cid)  # type: ignore[arg-type]
++        if target is None:  # 고르는 사이 동기화로 없어진 값
++            raise QueryInputError("고른 항목을 찾을 수 없어요. 질문을 다시 보내 주세요")
++        return Ref(cid, display_name(kind, target))  # type: ignore[arg-type]
++
++    async def _anchor(
++        self, type_: str, name: str, choices: list[Choice], unknown: list[str]
++    ) -> AnchorFilter | None:
++        tries: list[tuple[Literal["station", "place"], TargetKind]] = [("station", "station")]
++        if type_ == "place":
++            tries.insert(0, ("place", "location"))
++        for anchor_type, kind in tries:
++            if kind == "location":
++                matches = await self._source.lookup_place(name)
++            else:
++                matches = await self._source.lookup("station", name)
++            got = await self._one("anchor", kind, name, matches)
++            if isinstance(got, Ref):
++                return AnchorFilter(anchor_type, got)
++            if got is not None:
++                choices.append(got)
++                return AnchorFilter(anchor_type)  # 고른 뒤 QueryService.choose가 ref를 채운다
++        unknown.append(name)
++        return None
++
++    async def _one(
++        self, key: ChoiceKey, kind: TargetKind, name: str, matches: Sequence[Match]
++    ) -> Ref | Choice | None:
++        top = candidates(matches)
++        if not top:
++            return None
++        targets = await self._source.describe(kind, [m.canonical_id for m in top])
++        top = [m for m in top if m.canonical_id in targets]
++        if not top:
++            return None
++        if len(top) == 1:
++            target = targets[top[0].canonical_id]
++            return Ref(target.id, display_name(kind, target))
++        options = tuple(
++            Option(f"{kind}:{m.canonical_id}", label(kind, targets[m.canonical_id])) for m in top
++        )
++        return Choice(key, name, options)
+diff --git a/backend/tests/test_dictionary_db.py b/backend/tests/test_dictionary_db.py
+new file mode 100644
+index 0000000..702f331
+--- /dev/null
++++ b/backend/tests/test_dictionary_db.py
+@@ -0,0 +1,206 @@
++"""고유명사 사전 DB 테스트 (FR-403, dict_entry). 스키마(db/init)를 적재한 '테스트 전용' DB가
++있을 때만 돈다. 한 트랜잭션 안에서 표를 비우고 시험 데이터를 넣은 뒤 되돌린다.
++    CINELOCA_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_dictionary_db.py
++"""
++
++import asyncio
++import os
++from collections.abc import AsyncIterator, Awaitable, Callable
++from contextlib import asynccontextmanager
++
++import asyncpg
++import pytest
++
++from app.data import dictionary
++from app.data.ai_gateway.tasks import QueryConditions
++from app.services.entity_resolver import DictionaryResolver, PgDictionary
++from app.services.query_service import AnchorFilter, Ref
++
++DSN = os.environ.get("CINELOCA_TEST_DATABASE_URL")
++pytestmark = pytest.mark.skipif(not DSN, reason="CINELOCA_TEST_DATABASE_URL 없음")
++
++# 테스트 전용 가짜 데이터(실제 작품·출연 정보가 아니다)
++FIXTURE = """
++INSERT INTO source (id, org, name, url, license, policy) VALUES
++ ('DATA-01', '시험', '시험', 'https://example.org/1', '시험', 'STORE');
++INSERT INTO station (id, name, line, lat, lon, gu) VALUES
++ ('113', '부산', '1호선', 35.115, 129.041, '동구'),
++ ('119', '서면', '1호선', 35.158, 129.059, '부산진구'),
++ ('219', '서면', '2호선', 35.158, 129.059, '부산진구');
++INSERT INTO work (id, title, title_norm, release_year, source_id) VALUES
++ (1, '범죄도시', '범죄도시', 2017, 'DATA-01'),
++ (2, '친구', '친구', 2001, 'DATA-01'),
++ (3, '넷플릭스 친구', '넷플릭스친구', 2020, 'DATA-01'),
++ (4, 'JTBC 나의 해방일지', 'jtbc나의해방일지', 2022, 'DATA-01');
++INSERT INTO person (id, name) VALUES (1, '마동석'), (2, '김시험'), (3, '김시험'), (4, '출연없음');
++INSERT INTO work_person (work_id, person_id, role, ord) VALUES
++ (1, 1, 'actor', 1), (1, 2, 'actor', 2), (2, 3, 'director', 1);
++INSERT INTO location (id, name, name_norm, gu, lat, lon) VALUES
++ (1, '광안리해수욕장', '광안리해수욕장', '수영구', 35.153, 129.118),
++ (2, '영도대교', '영도대교', '영도구', 35.095, 129.036),
++ (3, '좌표 없는 영도대교 앞', '좌표없는영도대교앞', NULL, NULL, NULL);
++"""
++
++
++@asynccontextmanager
++async def _borrow(conn: asyncpg.Connection) -> AsyncIterator[asyncpg.Connection]:
++    yield conn
++
++
++def run(body: Callable[[asyncpg.Connection], Awaitable[None]]) -> None:
++    async def main() -> None:
++        conn = await asyncpg.connect(DSN)
++        tx = conn.transaction()
++        await tx.start()
++        try:
++            await conn.execute(
++                "TRUNCATE dict_entry, review_item, course_stop, course, photo, shooting,"
++                " work_person, person, work, location, station_time, station, source"
++                " RESTART IDENTITY CASCADE"
++            )
++            await conn.execute(FIXTURE)
++            await dictionary.rebuild(conn)
++            await body(conn)
++        finally:
++            await tx.rollback()
++            await conn.close()
++
++    asyncio.run(main())
++
++
++async def ids(conn: asyncpg.Connection, kind: str, text: str, **kw: object) -> list[str]:
++    return [m.canonical_id for m in await dictionary.lookup(conn, kind, text, **kw)]  # type: ignore[arg-type]
++
++
++def test_rebuild_fills_dictionary_from_knowledge_base() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        rows = await conn.fetch("SELECT kind, surface, canonical_id FROM dict_entry")
++        got = {(r["kind"], r["surface"], r["canonical_id"]) for r in rows}
++        assert {("work", "친구", "2"), ("work", "친구", "3"), ("work", "넷플릭스친구", "3")} <= got
++        assert {("work", "jtbc나의해방일지", "4"), ("work", "나의해방일지", "4")} <= got
++        assert {
++            ("person", "마동석", "1"),
++            ("person", "김시험", "2"),
++            ("person", "김시험", "3"),
++        } <= got
++        assert not [g for g in got if g[1] == "출연없음"]  # 작품에 연결되지 않은 인물은 넣지 않는다
++        assert {("station", "부산", "113"), ("station", "부산역", "113")} <= got
++        assert {("district", "해운대구", "해운대구"), ("district", "해운대", "해운대구")} <= got
++        districts = {g[1] for g in got if g[0] == "district"}
++        assert len(districts) == 16 + 11 and "중" not in districts
++        assert len(got) == len(rows)  # 같은 행을 두 번 넣지 않는다
++
++    run(body)
++
++
++def test_rebuild_is_idempotent_and_keeps_embeddings_of_unchanged_rows() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        vec = "[" + ",".join(["0.5"] * 1024) + "]"
++        await conn.execute(
++            "UPDATE dict_entry SET embedding = $1::text::vector WHERE surface = '마동석'", vec
++        )
++        before = await conn.fetch("SELECT id, kind, surface FROM dict_entry ORDER BY id")
++        await conn.execute("DELETE FROM work WHERE id = 4")
++        await conn.execute("INSERT INTO station VALUES ('120', '부전', '1호선', 35.16, 129.06)")
++        counts = await dictionary.rebuild(conn)
++        after = {r["id"] for r in await conn.fetch("SELECT id FROM dict_entry")}
++        gone = [r["surface"] for r in before if r["id"] not in after]
++        assert sorted(gone) == ["jtbc나의해방일지", "나의해방일지"]
++        assert counts["station"] == 6 + 2 and counts["work"] == 4
++        assert await conn.fetchval(
++            "SELECT embedding IS NOT NULL FROM dict_entry WHERE surface = '마동석'"
++        )
++
++    run(body)
++
++
++def test_lookup_normalizes_query_like_stored_surface() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        (m,) = await dictionary.lookup(conn, "person", "마 동석")
++        assert (m.canonical_id, m.score, m.via) == ("1", 1.0, "exact")
++        assert await ids(conn, "work", "나의 해방일지") == ["4"]  # 머리말 뗀 제목
++        assert await ids(conn, "station", "부산역") == ["113"]
++        assert await ids(conn, "district", "해운대") == ["해운대구"]
++        assert await ids(conn, "person", "  ") == []
++
++    run(body)
++
++
++def test_lookup_trigram_threshold() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        # '범죄도시 2' ↔ '범죄도시' 0.57: 통과
++        (m,) = await dictionary.lookup(conn, "work", "범죄도시 2")
++        assert (m.canonical_id, m.via) == ("1", "trigram") and 0.5 < m.score < 0.6
++        # 세 글자 이름의 한 글자 오타는 0.33이라 0.35를 넘지 못한다(임베딩 보완 대상)
++        assert await ids(conn, "person", "마동숙") == []
++        assert await ids(conn, "work", "마동석") == []  # 다른 종류에서는 찾지 않는다
++
++    run(body)
++
++
++def test_lookup_same_surface_returns_every_candidate() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        assert await ids(conn, "work", "친구") == ["2", "3"]
++        assert await ids(conn, "person", "김시험") == ["2", "3"]
++        assert await ids(conn, "station", "서면역") == ["119", "219"]
++
++    run(body)
++
++
++def test_lookup_embedding_fallback_only_with_query_vector() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        near = [1.0] + [0.0] * 1023
++        far = [0.0, 1.0] + [0.0] * 1022
++        assert not await dictionary.has_embeddings(conn, "person")
++        await conn.execute(
++            "UPDATE dict_entry SET embedding = $1::text::vector WHERE surface = '마동석'",
++            dictionary._vector_text(near),
++        )
++        assert await dictionary.has_embeddings(conn, "person")
++        assert await ids(conn, "person", "마동숙") == []
++        (m,) = await dictionary.lookup(conn, "person", "마동숙", query_vec=near)
++        assert (m.canonical_id, m.via) == ("1", "embedding") and m.score > 0.99
++        assert await ids(conn, "person", "마동숙", query_vec=far) == []  # 코사인 0.75 미만
++
++    run(body)
++
++
++def test_lookup_place_finds_located_shooting_places() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        assert [m.canonical_id for m in await dictionary.lookup_place(conn, "영도 대교")] == ["2"]
++        # 줄여 부른 이름. 좌표 없는 촬영지는 기준점이 될 수 없어 빠진다
++        assert [m.canonical_id for m in await dictionary.lookup_place(conn, "광안리")] == ["1"]
++        assert [m.canonical_id for m in await dictionary.lookup_place(conn, "영도대교 앞")] == ["2"]
++        assert await dictionary.lookup_place(conn, "태종대") == []
++
++    run(body)
++
++
++def test_resolver_with_database() -> None:
++    async def body(conn: asyncpg.Connection) -> None:
++        resolver = DictionaryResolver(PgDictionary(lambda: _borrow(conn)))
++        r = await resolver.resolve(
++            QueryConditions(
++                out_of_scope=False,
++                work_titles=["친구", "나의 해방일지"],
++                persons=["마 동석", "없는사람"],
++                genres=[],
++                districts=["수영구"],
++                release_year_from=None,
++                release_year_to=None,
++                anchor={"type": "station", "name": "서면"},
++                travel={"mode": "subway", "max_min": 20},
++                result_type="location",
++            )
++        )
++        assert r.filters.works == (Ref("4", "JTBC 나의 해방일지"),)
++        assert r.filters.persons == (Ref("1", "마동석"),)
++        assert r.unknown == ("없는사람",)
++        assert r.filters.anchor == AnchorFilter("station", None)
++        works, anchor = r.choices
++        assert [o.label for o in works.options] == ["친구 (2001)", "넷플릭스 친구 (2020)"]
++        assert [o.label for o in anchor.options] == ["서면역 (1호선)", "서면역 (2호선)"]
++        assert await resolver.pick(anchor, "station:219") == Ref("219", "서면역")
++        assert await resolver.pick(works, "work:2") == Ref("2", "친구")
++
++    run(body)
+diff --git a/backend/tests/test_entity_resolver.py b/backend/tests/test_entity_resolver.py
+new file mode 100644
+index 0000000..77b10c8
+--- /dev/null
++++ b/backend/tests/test_entity_resolver.py
+@@ -0,0 +1,183 @@
++"""DictionaryResolver 단위 테스트 (FR-403). DB 없이 가짜 사전 조회를 넣어 규칙만 본다."""
++
++import asyncio
++from collections.abc import Sequence
++
++import pytest
++
++from app.core.names import norm
++from app.data.ai_gateway.tasks import QueryConditions
++from app.data.dictionary import Match, Target, district_surfaces, station_surfaces
++from app.services.entity_resolver import DictionaryResolver, candidates, label
++from app.services.query_service import AnchorFilter, QueryInputError, Ref, TravelFilter
++
++TARGETS = {
++    "work": {
++        "1": Target("1", "범죄도시", "2017"),
++        "2": Target("2", "친구", "2001"),
++        "3": Target("3", "넷플릭스 친구", None),
++    },
++    "person": {"7": Target("7", "마동석", "범죄도시")},
++    "station": {"113": Target("113", "부산", "1호선"), "219": Target("219", "서면", "2호선")},
++    "location": {"40": Target("40", "영도대교", "영도구"), "41": Target("41", "영도다리 앞", None)},
++}
++# 정규화한 질의 → 후보. 가짜도 진짜처럼 norm()을 거친 표기로만 찾는다
++FOUND = {
++    ("work", "범죄도시"): [Match("1", "범죄도시", 1.0, "exact")],
++    ("work", "친구"): [Match("2", "친구", 1.0, "exact"), Match("3", "친구", 1.0, "exact")],
++    ("person", "마동석"): [Match("7", "마동석", 1.0, "exact")],
++    ("station", "부산역"): [Match("113", "부산역", 1.0, "exact")],
++    ("location", "영도대교"): [Match("40", "영도대교", 1.0, "exact")],
++    ("location", "영도"): [Match("40", "영도대교", 0.75, "trigram"),
++                           Match("41", "영도다리앞", 0.72, "trigram")],
++}  # fmt: skip
++
++
++class FakeSource:
++    def __init__(self) -> None:
++        self.asked: list[tuple[str, str]] = []
++
++    async def lookup(self, kind: str, text: str) -> list[Match]:
++        self.asked.append((kind, text))
++        return FOUND.get((kind, norm(text)), [])
++
++    async def lookup_place(self, text: str) -> list[Match]:
++        self.asked.append(("location", text))
++        return FOUND.get(("location", norm(text)), [])
++
++    async def describe(self, kind: str, ids: Sequence[str]) -> dict[str, Target]:
++        return {i: TARGETS[kind][i] for i in ids if i in TARGETS[kind]}
++
++
++def cond(**kw: object) -> QueryConditions:
++    base: dict[str, object] = dict(
++        out_of_scope=False,
++        work_titles=[],
++        persons=[],
++        genres=[],
++        districts=[],
++        release_year_from=None,
++        release_year_to=None,
++        anchor=None,
++        travel=None,
++        result_type="location",
++    )
++    return QueryConditions.model_validate({**base, **kw})
++
++
++def resolve(**kw: object):
++    return asyncio.run(DictionaryResolver(FakeSource()).resolve(cond(**kw)))
++
++
++def test_names_become_refs_and_other_conditions_pass_through() -> None:
++    r = resolve(
++        work_titles=["범죄도시"],
++        persons=["마 동석"],  # 띄어 써도 같은 정규화로 찾는다
++        genres=["범죄·느와르"],
++        districts=["해운대구"],
++        release_year_from=2010,
++        release_year_to=2019,
++        result_type="work",
++    )
++    f = r.filters
++    assert f.works == (Ref("1", "범죄도시"),)
++    assert f.persons == (Ref("7", "마동석"),)
++    assert (f.genres, f.districts) == (("범죄·느와르",), ("해운대구",))
++    assert (f.year_from, f.year_to, f.result_type) == (2010, 2019, "work")
++    assert r.choices == () and r.unknown == ()
++
++
++def test_same_title_asks_choice_with_year_labels() -> None:
++    r = resolve(work_titles=["친구", "범죄도시"])
++    assert r.filters.works == (Ref("1", "범죄도시"),)  # 정해진 것만 조건에 들어간다
++    (choice,) = r.choices
++    assert (choice.key, choice.name) == ("works", "친구")
++    assert [(o.id, o.label) for o in choice.options] == [
++        ("work:2", "친구 (2001)"),
++        ("work:3", "넷플릭스 친구"),
++    ]
++
++
++def test_unknown_names_are_dropped_and_reported() -> None:
++    r = resolve(work_titles=["없는작품", "범죄도시"], persons=["아무개"])
++    assert r.filters.works == (Ref("1", "범죄도시"),)
++    assert r.filters.persons == ()
++    assert r.unknown == ("없는작품", "아무개")
++
++
++def test_duplicate_names_resolve_once() -> None:
++    r = resolve(work_titles=["범죄도시", "범죄 도시", "범죄도시"])
++    assert r.filters.works == (Ref("1", "범죄도시"),)
++
++
++def test_station_without_name_means_any_station() -> None:
++    r = resolve(anchor={"type": "station", "name": None}, travel={"mode": "walk", "max_min": 10})
++    assert r.filters.anchor == AnchorFilter("station", None)
++    assert r.filters.travel == TravelFilter("walk", 10)
++    assert r.choices == ()
++
++
++def test_named_station_and_current_anchor() -> None:
++    r = resolve(anchor={"type": "station", "name": "부산역"})
++    assert r.filters.anchor == AnchorFilter("station", Ref("113", "부산역"))
++    r = resolve(anchor={"type": "current"}, travel={"mode": "walk", "max_min": 15})
++    assert r.filters.anchor == AnchorFilter("current")
++    assert r.filters.travel == TravelFilter("walk", 15)
++
++
++def test_place_anchor_uses_location_names_then_station() -> None:
++    r = resolve(anchor={"type": "place", "name": "영도대교"})
++    assert r.filters.anchor == AnchorFilter("place", Ref("40", "영도대교"))
++    r = resolve(anchor={"type": "place", "name": "부산역"})  # 촬영지에 없으면 역에서 찾는다
++    assert r.filters.anchor == AnchorFilter("station", Ref("113", "부산역"))
++
++
++def test_close_place_candidates_ask_choice_and_keep_anchor_type() -> None:
++    r = resolve(anchor={"type": "place", "name": "영도"}, travel={"mode": "walk", "max_min": 10})
++    assert r.filters.anchor == AnchorFilter("place", None)
++    assert r.filters.travel == TravelFilter("walk", 10)
++    (choice,) = r.choices
++    assert choice.key == "anchor"
++    assert [(o.id, o.label) for o in choice.options] == [
++        ("location:40", "영도대교 (영도구)"),
++        ("location:41", "영도다리 앞"),
++    ]
++
++
++def test_unknown_anchor_drops_travel_too() -> None:
++    r = resolve(anchor={"type": "station", "name": "없는역"}, travel={"mode": "walk", "max_min": 5})
++    assert r.filters.anchor is None and r.filters.travel is None
++    assert r.unknown == ("없는역",)
++    r = resolve(travel={"mode": "walk", "max_min": 5})  # 기준 없는 이동 조건은 뜻이 없다
++    assert r.filters.travel is None
++
++
++def test_pick_returns_ref_of_chosen_option() -> None:
++    resolver = DictionaryResolver(FakeSource())
++    choice = asyncio.run(resolver.resolve(cond(work_titles=["친구"]))).choices[0]
++    assert asyncio.run(resolver.pick(choice, "work:2")) == Ref("2", "친구")
++    with pytest.raises(QueryInputError):
++        asyncio.run(resolver.pick(choice, "work:1"))  # 후보에 없던 값
++
++
++def test_candidates_keeps_only_scores_near_the_top() -> None:
++    a, b, c = (Match("1", "가", 0.80, "trigram"), Match("2", "나", 0.76, "trigram"),
++               Match("3", "다", 0.74, "trigram"))  # fmt: skip
++    assert candidates([a, b, c]) == [a, b]  # 0.05 안만 같은 후보
++    assert candidates([a, c]) == [a]
++    assert candidates([a, Match("1", "가2", 0.79, "trigram")]) == [a]  # 같은 표준 값은 한 번
++    assert candidates([]) == []
++
++
++def test_labels_and_surfaces() -> None:
++    assert label("station", Target("219", "서면", "2호선")) == "서면역 (2호선)"
++    assert label("work", Target("9", "무제", None)) == "무제"
++    assert label("station", Target("205", "벡스코(시립미술관)", "2호선")) == "벡스코역 (2호선)"
++    assert label("station", Target("1", "부산역", None)) == "부산역"
++    assert station_surfaces("서면") == ["서면", "서면역"]
++    assert station_surfaces("부산역") == ["부산", "부산역"]
++    surfaces = dict(district_surfaces())
++    assert surfaces["해운대"] == "해운대구" and surfaces["기장"] == "기장군"
++    assert len({name for _, name in district_surfaces()}) == 16
++    # '구'를 떼면 한 글자가 되는 곳은 짧은 이름을 두지 않는다
++    assert not {"중", "서", "동", "남", "북"} & set(surfaces)
+diff --git a/backend/tests/test_staging_db.py b/backend/tests/test_staging_db.py
+index 54cfe54..cafcf16 100644
+--- a/backend/tests/test_staging_db.py
++++ b/backend/tests/test_staging_db.py
+@@ -163,3 +163,21 @@ def test_pending_ai_item_survives_auto_match() -> None:
+         assert [r["proposer"] for r in rows] == ["ai"]
+ 
+     run(body)
++
++
++def test_publish_rebuilds_dictionary() -> None:
++    """반영이 끝나면 고유명사 사전(dict_entry, FR-403)이 새 작품·역을 담는다."""
++
++    async def body(conn: asyncpg.Connection) -> None:
++        await load(conn, [work("w1"), work("w2")], [LOC_A], [("w1", "a", "DATA-01", {}, None)])
++        await load(conn, [work("w1")], [LOC_A], [("w1", "a", "DATA-01", {}, None)])
++        rows = await conn.fetch(
++            "SELECT kind, surface FROM dict_entry WHERE kind IN ('work', 'station')"
++        )
++        assert sorted((r["kind"], r["surface"]) for r in rows) == [
++            ("station", "가"),
++            ("station", "가역"),
++            ("work", "w1"),
++        ]
++
++    run(body)

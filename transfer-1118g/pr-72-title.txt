@@ -1,0 +1,1 @@
+feat: F3 사전 대조 DictionaryResolver와 dict_entry 재구성 추가 (FR-303)

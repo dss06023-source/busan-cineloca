@@ -1,0 +1,1 @@
+feat: F3 검색 템플릿 T1~T4와 TemplateSearcher 추가 (FR-304)

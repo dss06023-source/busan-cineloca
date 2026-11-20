@@ -1,0 +1,730 @@
+diff --git a/backend/app/api/routers/query.py b/backend/app/api/routers/query.py
+new file mode 100644
+index 0000000..14a3811
+--- /dev/null
++++ b/backend/app/api/routers/query.py
+@@ -0,0 +1,189 @@
++"""F4 AI 대화형 탐색 API: API-013 질의, API-014 필터 패널 검색, API-015 새 대화 (FR-401~412).
++
++- 질의 세션(최근 3턴, 30분)은 서버 메모리에 있어 QueryService는 프로세스에 하나만 둔다.
++- 입력 오류(빈 질문·200자 초과·고를 항목 없음)는 400, 세션당 분당 5회 초과는 429(ERR-011).
++- AI가 답하지 못하면 200에 status=ai_unavailable과 필터 패널 값을 돌려준다(FR-411).
++"""
++
++import logging
++from dataclasses import asdict
++from functools import lru_cache
++from typing import Annotated
++
++from fastapi import APIRouter, Depends, Header, Response
++
++from app.api.errors import ERROR_RESPONSES, ApiError
++from app.api.schemas.common import ErrorResponse
++from app.api.schemas.locations import BasePoint
++from app.api.schemas.query import (
++    ChooseRequest,
++    FiltersModel,
++    QueryRequest,
++    QueryResponse,
++    RemoveChipRequest,
++    SearchRequest,
++    SearchResponse,
++)
++from app.data.ai_gateway import (
++    AISettings,
++    PgAICache,
++    PgUsageCounter,
++    build_embedder,
++    build_llm_client,
++)
++from app.services.entity_resolver import DictionaryResolver, PgDictionary
++from app.services.filter_search import FilterSearchService
++from app.services.query_service import (
++    AnchorFilter,
++    Filters,
++    QueryInputError,
++    QueryResult,
++    QueryService,
++    Ref,
++    TravelFilter,
++)
++from app.services.template_searcher import TemplateSearcher
++
++logger = logging.getLogger(__name__)
++router = APIRouter(tags=["F4 AI 탐색"])
++
++
++@lru_cache
++def get_query_service() -> QueryService:
++    """환경변수(AI_PROVIDER 등)로 AI 공급자를 고른다. 설정이 틀리면 AI 없이(강등) 돈다."""
++    try:
++        settings = AISettings.from_env()
++        client = build_llm_client(settings, usage=PgUsageCounter(), cache=PgAICache())
++        embedder = build_embedder(settings)
++    except ValueError:
++        logger.warning("AI 설정이 올바르지 않아 AI 없이 시작합니다")
++        client, embedder = build_llm_client(AISettings(provider="none")), None
++
++    async def embed(text: str) -> list[float]:
++        return (await embedder.embed([text]))[0]  # type: ignore[union-attr]
++
++    dictionary = PgDictionary(embed=embed if embedder else None)
++    return QueryService(client, DictionaryResolver(dictionary), TemplateSearcher())
++
++
++@lru_cache
++def get_filter_search() -> FilterSearchService:
++    return FilterSearchService(TemplateSearcher())
++
++
++Service = Annotated[QueryService, Depends(get_query_service)]
++FilterSearch = Annotated[FilterSearchService, Depends(get_filter_search)]
++SessionId = Annotated[str | None, Header(alias="X-Session-Id", max_length=64)]
++
++_BAD = {"model": ErrorResponse, "description": "입력 오류(INVALID_QUERY)"}
++_LIMIT = {"model": ErrorResponse, "description": "세션당 분당 5회 초과(RATE_LIMITED, ERR-011)"}
++_COMMON = {400: _BAD, 422: ERROR_RESPONSES[422], 503: ERROR_RESPONSES[503]}
++
++
++def _point(base: BasePoint | None) -> tuple[float, float] | None:
++    return (base.lat, base.lon) if base else None
++
++
++def _bad_request(e: QueryInputError) -> ApiError:
++    return ApiError(400, "INVALID_QUERY", str(e))
++
++
++def _response(result: QueryResult) -> QueryResponse:
++    if result.status == "rate_limited":
++        raise ApiError(429, "RATE_LIMITED", "잠시 후 다시 시도해 주세요", result.retry_after_s or 1)
++    return QueryResponse.model_validate(asdict(result))
++
++
++def to_filters(m: FiltersModel) -> Filters:
++    anchor = None
++    if m.anchor:
++        ref = Ref(m.anchor.ref.id, m.anchor.ref.name) if m.anchor.ref else None
++        anchor = AnchorFilter(m.anchor.type, ref)
++    return Filters(
++        works=tuple(Ref(r.id, r.name) for r in m.works),
++        persons=tuple(Ref(r.id, r.name) for r in m.persons),
++        genres=tuple(m.genres),
++        districts=tuple(m.districts),
++        year_from=m.year_from,
++        year_to=m.year_to,
++        anchor=anchor,
++        travel=TravelFilter(m.travel.mode, m.travel.max_min) if m.travel else None,
++        result_type=m.result_type,
++    )
++
++
++@router.post(
++    "/query",
++    response_model=QueryResponse,
++    responses={**_COMMON, 429: _LIMIT},
++    summary="API-013 AI 대화형 탐색",
++)
++async def ask(req: QueryRequest, service: Service, session_id: SessionId = None) -> QueryResponse:
++    """질문을 조건으로 바꿔 촬영지를 찾고 요약한다. 후속 질문은 세션 조건에 더한다(FR-408)."""
++    try:
++        result = await service.ask(req.text, session_id=session_id, base_point=_point(req.base))
++    except QueryInputError as e:
++        raise _bad_request(e) from None
++    return _response(result)
++
++
++@router.post(
++    "/query/choose",
++    response_model=QueryResponse,
++    responses=_COMMON,
++    summary="API-013 후보 고르기",
++)
++async def choose(
++    req: ChooseRequest, service: Service, session_id: SessionId = None
++) -> QueryResponse:
++    """status=choose 응답의 choices에서 하나를 골라 이어서 검색한다(FR-403)."""
++    try:
++        result = await service.choose(
++            session_id or "", req.key, req.option_id, base_point=_point(req.base)
++        )
++    except QueryInputError as e:
++        raise _bad_request(e) from None
++    return _response(result)
++
++
++@router.post(
++    "/query/chips/remove",
++    response_model=QueryResponse,
++    responses=_COMMON,
++    summary="API-013 조건 칩 지우기",
++)
++async def remove_chip(
++    req: RemoveChipRequest, service: Service, session_id: SessionId = None
++) -> QueryResponse:
++    """해석 조건 하나를 빼고 다시 검색한다(FR-412). AI를 다시 부르지 않는다(요약 제외)."""
++    try:
++        result = await service.remove_chip(session_id or "", req.key, base_point=_point(req.base))
++    except QueryInputError as e:
++        raise _bad_request(e) from None
++    return _response(result)
++
++
++@router.delete(
++    "/query/session",
++    status_code=204,
++    responses={422: ERROR_RESPONSES[422]},
++    summary="API-015 새 대화(맥락 삭제)",
++)
++async def reset_session(service: Service, session_id: SessionId = None) -> Response:
++    service.reset(session_id)
++    return Response(status_code=204)
++
++
++@router.post(
++    "/search",
++    response_model=SearchResponse,
++    responses=_COMMON,
++    summary="API-014 필터 패널 검색",
++)
++async def filter_search(req: SearchRequest, service: FilterSearch) -> SearchResponse:
++    """AI 없이 고른 조건으로 검색한다. 결과가 없으면 조건을 차례로 푼다(FR-405·410)."""
++    try:
++        result = await service.search(to_filters(req.conditions), base_point=_point(req.base))
++    except QueryInputError as e:
++        raise _bad_request(e) from None
++    return SearchResponse.model_validate(asdict(result))
+diff --git a/backend/app/api/schemas/query.py b/backend/app/api/schemas/query.py
+new file mode 100644
+index 0000000..dfc99ae
+--- /dev/null
++++ b/backend/app/api/schemas/query.py
+@@ -0,0 +1,142 @@
++"""F4 AI 대화형 탐색 스키마: API-013 질의·고르기·칩 지우기, API-014 필터 패널 검색 (FR-401~412).
++
++- 응답은 QueryService의 QueryResult 필드를 그대로 옮긴 것이다.
++- 기준 위치 좌표('내 위치')는 POST 본문의 base로만 받고, 응답·세션·로그에 남기지 않는다(BR-10).
++- 세션 ID는 X-Session-Id 요청 헤더로 받는다(SDD 6장). 서버가 만든 ID를 응답 session_id로 돌려주므로
++  다음 요청부터 그 값을 헤더에 넣는다.
++"""
++
++from typing import Literal
++
++from pydantic import BaseModel, Field, model_validator
++
++from app.api.schemas.locations import BasePoint, District
++from app.core.genres import GenreGroup
++
++QueryStatus = Literal["ok", "not_found", "choose", "out_of_scope", "ai_unavailable"]
++ChoiceKey = Literal["works", "persons", "anchor"]
++ChipKey = Literal["works", "persons", "genres", "districts", "years", "anchor", "travel"]
++
++
++class RefModel(BaseModel):
++    """사전 표준 값(작품·인물·역·촬영지)."""
++
++    id: str = Field(min_length=1, max_length=20, description="작품·인물·촬영지 번호, 역 코드")
++    name: str = Field(max_length=100)
++
++
++class AnchorModel(BaseModel):
++    type: Literal["station", "place", "current"]
++    ref: RefModel | None = Field(default=None, description="station에서 비우면 '아무 역'")
++
++
++class TravelModel(BaseModel):
++    mode: Literal["walk", "subway"]
++    max_min: int | None = Field(default=None, ge=1, le=300)
++
++
++class FiltersModel(BaseModel):
++    """확정된 검색 조건. 필터 패널(FR-410)이 보내고, AI 실패 때 미리 채울 값으로 받는다(FR-411)."""
++
++    works: list[RefModel] = Field(default_factory=list, max_length=10)
++    persons: list[RefModel] = Field(default_factory=list, max_length=10)
++    genres: list[GenreGroup] = Field(default_factory=list, max_length=12)
++    districts: list[District] = Field(default_factory=list, max_length=16)
++    year_from: int | None = Field(default=None, ge=1900, le=2100)
++    year_to: int | None = Field(default=None, ge=1900, le=2100)
++    anchor: AnchorModel | None = None
++    travel: TravelModel | None = None
++    result_type: Literal["location", "work"] = "location"
++
++    @model_validator(mode="after")
++    def _check_years(self) -> "FiltersModel":
++        if self.year_from and self.year_to and self.year_from > self.year_to:
++            raise ValueError("year_from은 year_to보다 클 수 없습니다")
++        return self
++
++
++class QueryRequest(BaseModel):
++    """API-013 요청. 글자 수(200자)는 서비스가 확인해 400으로 알린다(FR-401)."""
++
++    text: str = Field(max_length=2000, description="질문(200자까지)")
++    base: BasePoint | None = Field(default=None, description="현재 위치('내 위치' 조건에만 씀)")
++
++
++class ChooseRequest(BaseModel):
++    """후보가 여럿일 때 하나 고르기(FR-403)."""
++
++    key: ChoiceKey
++    option_id: str = Field(max_length=40)
++    base: BasePoint | None = None
++
++
++class RemoveChipRequest(BaseModel):
++    """해석 조건 칩 하나 지우고 다시 검색(FR-412)."""
++
++    key: ChipKey
++    base: BasePoint | None = None
++
++
++class SearchRequest(BaseModel):
++    """API-014 요청."""
++
++    conditions: FiltersModel
++    base: BasePoint | None = None
++
++
++class Chip(BaseModel):
++    key: ChipKey
++    label: str
++
++
++class Option(BaseModel):
++    id: str
++    label: str = Field(examples=["친구 (2001)"])
++
++
++class Choice(BaseModel):
++    key: ChoiceKey
++    name: str = Field(description="사용자가 말한 이름")
++    options: list[Option]
++
++
++class WorkBrief(BaseModel):
++    title: str
++    year: int | None = None
++
++
++class Hit(BaseModel):
++    location_id: int
++    name: str
++    gu: str | None = None
++    lat: float
++    lon: float
++    works: list[WorkBrief] = Field(description="조건에 맞는 작품 먼저")
++    station: str | None = Field(default=None, description="가장 가까운 역")
++    walk_min: int | None = Field(default=None, description="그 역에서 도보 분")
++    source_ids: list[str] = Field(description="출처 ID(출처 카드로 바꿔 보여 준다, FR-704)")
++
++
++class SearchResponse(BaseModel):
++    """API-014 응답."""
++
++    status: Literal["ok", "not_found"]
++    notices: list[str]
++    chips: list[Chip]
++    relaxed: list[str] = Field(description="결과가 없어 푼 조건(FR-405)")
++    total: int = Field(description="조건에 맞는 전체 수(hits는 20건까지)")
++    hits: list[Hit] = Field(max_length=20)
++    filter_panel: FiltersModel | None = None
++
++
++class QueryResponse(SearchResponse):
++    """API-013 응답. status가 choose면 choices에서 고르고, ai_unavailable·not_found면
++    filter_panel 값으로 필터 패널을 연다(FR-411)."""
++
++    status: QueryStatus  # type: ignore[assignment]
++    session_id: str
++    masked: bool = Field(description="개인정보로 보이는 내용을 가렸는지(FR-702)")
++    unknown: list[str] = Field(description="사전에 없어 뺀 이름(FR-403)")
++    summary: list[str] = Field(description="결과 요약 문장(최대 3개, FR-407)")
++    ai_generated: bool = Field(description="summary가 AI 생성 문장인지(FR-707)")
++    choices: list[Choice]
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 471cf88..d69c311 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -12,7 +12,7 @@ from fastapi import FastAPI
+ from app import __version__
+ from app.api.errors import install_error_handlers
+ from app.api.request_log import DailyJsonlWriter, RequestLogMiddleware
+-from app.api.routers import health, locations, meta, works
++from app.api.routers import health, locations, meta, query, works
+ from app.core.config import Settings, get_settings
+ from app.data import db
+ from app.support.privacy import install_privacy_log_filter
+@@ -52,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
+     app.include_router(locations.router, prefix="/api")
+     app.include_router(meta.router, prefix="/api")
+     app.include_router(works.router, prefix="/api")
++    app.include_router(query.router, prefix="/api")
+     return app
+ 
+ 
+diff --git a/backend/app/services/filter_search.py b/backend/app/services/filter_search.py
+new file mode 100644
+index 0000000..52a60c7
+--- /dev/null
++++ b/backend/app/services/filter_search.py
+@@ -0,0 +1,62 @@
++"""F4 필터 패널 검색 (COMP-06, UC-06, FR-405·406·410, API-014).
++
++AI 없이 사용자가 고른 조건(Filters)으로 바로 검색한다. AI 대화형 탐색(QueryService)과 같은
++검색 템플릿(QuerySearcher)·조건 완화 순서(FR-405)를 쓴다. 세션에 넣지 않고 요약도 만들지 않는다.
++기준 위치 좌표는 검색에만 쓴다(BR-10).
++"""
++
++from __future__ import annotations
++
++from app.services.query_service import (
++    MAX_RESULTS,
++    NO_LOCATION_NOTICE,
++    NOT_FOUND_NOTICE,
++    RELAX_LABELS,
++    RELAX_ORDER,
++    Filters,
++    QueryResult,
++    QuerySearcher,
++    chips,
++)
++
++
++class FilterSearchService:
++    def __init__(self, searcher: QuerySearcher) -> None:
++        self._searcher = searcher
++
++    async def search(
++        self, filters: Filters, *, base_point: tuple[float, float] | None = None
++    ) -> QueryResult:
++        notices: tuple[str, ...] = ()
++        if filters.anchor and filters.anchor.type == "current" and base_point is None:
++            filters = filters.without("anchor")
++            notices = (NO_LOCATION_NOTICE,)
++        asked = filters
++        page = await self._searcher.search(filters, base_point=base_point, limit=MAX_RESULTS)
++        relaxed: list[str] = []
++        for key in RELAX_ORDER:  # FR-405: 이동 시간 → 개봉연도 → 장르 → 구·군
++            if page.total > 0:
++                break
++            if not filters.has(key):
++                continue
++            filters = filters.without(key)
++            relaxed.append(RELAX_LABELS[key])
++            page = await self._searcher.search(filters, base_point=base_point, limit=MAX_RESULTS)
++        if page.total == 0:
++            return QueryResult(
++                "not_found",
++                "",
++                (*notices, NOT_FOUND_NOTICE),
++                chips=chips(filters),
++                relaxed=tuple(relaxed),
++                filter_panel=asked,
++            )
++        return QueryResult(
++            "ok",
++            "",
++            notices,
++            chips=chips(filters),
++            relaxed=tuple(relaxed),
++            total=page.total,
++            hits=page.hits[:MAX_RESULTS],
++        )
+diff --git a/backend/tests/test_f4_api.py b/backend/tests/test_f4_api.py
+new file mode 100644
+index 0000000..2ce00f8
+--- /dev/null
++++ b/backend/tests/test_f4_api.py
+@@ -0,0 +1,292 @@
++"""F4 API 계층 테스트 (API-013·014·015, FR-401~412). 실제 AI·DB 없이 형식·오류·흐름만 본다.
++
++AI는 가짜 공급자(FakeProvider), 사전 대조·검색은 test_query_service의 가짜 포트를 쓴다.
++"""
++
++from collections.abc import Iterator
++from dataclasses import dataclass
++
++import pytest
++from fastapi.testclient import TestClient
++
++from app.api.routers.query import get_filter_search, get_query_service, to_filters
++from app.api.schemas.query import FiltersModel
++from app.data.ai_gateway import ProviderError
++from app.data.db import DatabaseUnavailable
++from app.main import create_app
++from app.services.filter_search import FilterSearchService
++from app.services.query_service import AnchorFilter, Filters, QueryService, Ref, TravelFilter
++from tests.test_query_service import SUMMARY, FakeSearcher, cond, make
++
++HERE = {"lat": 35.123456, "lon": 129.123456}
++
++
++@dataclass
++class Rig:
++    client: TestClient
++    service: QueryService
++    searcher: FakeSearcher
++    provider: object
++
++    def ask(self, text: str, session: str | None = None, **body: object):
++        headers = {"X-Session-Id": session} if session else {}
++        return self.client.post("/api/query", json={"text": text, **body}, headers=headers)
++
++
++def rig(*replies: object, searcher: FakeSearcher | None = None) -> Rig:
++    service, provider, _, searcher = make(*replies, searcher=searcher)
++    app = create_app()
++    app.dependency_overrides[get_query_service] = lambda: service
++    app.dependency_overrides[get_filter_search] = lambda: FilterSearchService(searcher)
++    return Rig(TestClient(app), service, searcher, provider)
++
++
++@pytest.fixture
++def plain() -> Iterator[Rig]:
++    yield rig(cond(work_titles=["친구"]), SUMMARY)
++
++
++def test_ask_returns_query_result_fields(plain: Rig) -> None:
++    res = plain.ask("친구 촬영지 알려줘")
++
++    assert res.status_code == 200
++    body = res.json()
++    assert set(body) == {
++        "status", "session_id", "notices", "masked", "chips", "unknown", "relaxed", "total",
++        "hits", "summary", "ai_generated", "choices", "filter_panel",
++    }  # fmt: skip
++    assert body["status"] == "ok" and body["session_id"]
++    assert body["chips"] == [{"key": "works", "label": "작품: 친구"}]
++    assert body["total"] == 2
++    assert body["hits"][0] == {
++        "location_id": 1,
++        "name": "자갈치시장",
++        "gu": "중구",
++        "lat": 35.09,
++        "lon": 129.03,
++        "works": [{"title": "친구", "year": 2001}],
++        "station": "자갈치역",
++        "walk_min": 5,
++        "source_ids": [],
++    }
++    assert len(body["summary"]) == 2 and body["ai_generated"] is True  # FR-707
++    assert body["choices"] == [] and body["filter_panel"] is None
++
++
++def test_base_point_comes_from_body_only_and_is_not_echoed() -> None:
++    r = rig(cond(anchor={"type": "current"}, travel={"mode": "walk", "max_min": 10}), SUMMARY)
++    res = r.ask("내 주변 걸어서 10분", base=HERE)
++
++    assert res.status_code == 200
++    assert r.searcher.calls[-1][1] == (35.123456, 129.123456)
++    assert "35.123456" not in res.text and "129.123456" not in res.text  # BR-10
++    assert {"key": "anchor", "label": "기준: 내 위치"} in res.json()["chips"]
++
++
++def test_follow_up_uses_session_header() -> None:
++    r = rig(cond(work_titles=["친구"]), SUMMARY, cond(districts=["중구"]), SUMMARY)
++    first = r.ask("친구 촬영지").json()
++    second = r.ask("그중 중구만", session=first["session_id"]).json()
++
++    assert second["session_id"] == first["session_id"]
++    assert [c["key"] for c in second["chips"]] == ["works", "districts"]  # FR-408
++
++
++@pytest.mark.parametrize("text", ["", "   ", "가" * 201])
++def test_bad_text_is_400_without_calling_ai(plain: Rig, text: str) -> None:
++    res = plain.ask(text)
++
++    assert res.status_code == 400
++    assert res.json()["error"]["code"] == "INVALID_QUERY"
++    assert plain.provider.calls == []  # type: ignore[attr-defined]
++
++
++def test_malformed_request_is_422_without_echoing_values(plain: Rig) -> None:
++    assert plain.client.post("/api/query", json={}).status_code == 422
++    res = plain.ask("친구 촬영지", base={"lat": 135.123456, "lon": 129.0})
++    assert res.status_code == 422
++    assert res.json()["error"]["code"] == "INVALID_REQUEST" and "135.123456" not in res.text
++
++
++def test_choose_then_search() -> None:
++    r = rig(cond(anchor={"type": "station", "name": "서면"}), SUMMARY)
++    asked = r.ask("서면역 근처 촬영지").json()
++
++    assert asked["status"] == "choose" and asked["hits"] == []
++    assert asked["choices"] == [
++        {
++            "key": "anchor",
++            "name": "서면",
++            "options": [
++                {"id": "s1", "label": "서면역(1호선)"},
++                {"id": "s2", "label": "서면역(2호선)"},
++            ],
++        }
++    ]
++    session = {"X-Session-Id": asked["session_id"]}
++    res = r.client.post(
++        "/api/query/choose", json={"key": "anchor", "option_id": "s2"}, headers=session
++    )
++    assert res.status_code == 200
++    body = res.json()
++    assert body["status"] == "ok" and body["total"] == 2
++    assert body["chips"] == [{"key": "anchor", "label": "기준: 서면역(2호선)"}]
++    assert r.searcher.calls[-1][0].anchor == AnchorFilter("station", Ref("s2", "서면역(2호선)"))
++
++
++def test_choose_without_pending_choice_is_400(plain: Rig) -> None:
++    body = {"key": "anchor", "option_id": "s1"}
++    res = plain.client.post("/api/query/choose", json=body)  # 세션 없음
++    assert res.status_code == 400 and res.json()["error"]["code"] == "INVALID_QUERY"
++    session = {"X-Session-Id": plain.ask("친구 촬영지").json()["session_id"]}
++    assert plain.client.post("/api/query/choose", json=body, headers=session).status_code == 400
++    bad_key = {"key": "genres", "option_id": "s1"}
++    assert plain.client.post("/api/query/choose", json=bad_key).status_code == 422
++
++
++def test_remove_chip_searches_again() -> None:
++    r = rig(cond(work_titles=["친구"], districts=["중구"]), SUMMARY, SUMMARY)
++    session = {"X-Session-Id": r.ask("중구의 친구 촬영지").json()["session_id"]}
++    res = r.client.post("/api/query/chips/remove", json={"key": "districts"}, headers=session)
++
++    assert res.status_code == 200
++    assert [c["key"] for c in res.json()["chips"]] == ["works"]
++    assert r.searcher.calls[-1][0].districts == ()
++    again = r.client.post("/api/query/chips/remove", json={"key": "districts"}, headers=session)
++    assert again.status_code == 400  # 이미 없는 조건
++
++
++def test_reset_session_forgets_context() -> None:
++    r = rig(cond(work_titles=["친구"]), SUMMARY, cond(districts=["중구"]), SUMMARY)
++    first = r.ask("친구 촬영지").json()
++    res = r.client.delete("/api/query/session", headers={"X-Session-Id": first["session_id"]})
++
++    assert res.status_code == 204 and res.content == b""
++    second = r.ask("그중 중구만", session=first["session_id"]).json()
++    assert second["session_id"] != first["session_id"]
++    assert [c["key"] for c in second["chips"]] == ["districts"]
++    assert r.client.delete("/api/query/session").status_code == 204  # 세션이 없어도 204
++
++
++def test_ai_down_returns_200_with_filter_panel() -> None:
++    r = rig(ProviderError("upstream", "down"), ProviderError("upstream", "down"))
++    res = r.ask("친구 촬영지")
++
++    assert res.status_code == 200
++    body = res.json()
++    assert body["status"] == "ai_unavailable" and body["hits"] == []
++    assert body["filter_panel"] == FiltersModel().model_dump()  # FR-411
++    assert r.searcher.calls == []
++
++
++def test_sixth_ai_request_in_a_minute_is_429() -> None:
++    r = rig(*[cond(out_of_scope=True)] * 5)
++    session = r.ask("날씨 어때").json()["session_id"]
++    for _ in range(4):
++        assert r.ask("날씨 어때", session=session).json()["status"] == "out_of_scope"
++    res = r.ask("날씨 어때", session=session)
++
++    assert res.status_code == 429
++    assert res.json()["error"]["code"] == "RATE_LIMITED"  # ERR-011
++    assert int(res.headers["Retry-After"]) >= 1
++
++
++def test_database_down_is_503() -> None:
++    class DownSearcher(FakeSearcher):
++        async def search(self, filters, *, base_point, limit):
++            raise DatabaseUnavailable
++
++    r = rig(cond(work_titles=["친구"]), searcher=DownSearcher())
++    res = r.ask("친구 촬영지")
++    assert res.status_code == 503 and res.json()["error"]["code"] == "DB_UNAVAILABLE"
++    res = r.client.post("/api/search", json={"conditions": {}})
++    assert res.status_code == 503
++
++
++# ── API-014 필터 패널 검색 ─────────────────────────────────
++CONDITIONS = {
++    "works": [{"id": "3", "name": "해운대"}],
++    "genres": ["재난"],
++    "districts": ["해운대구"],
++    "year_from": 2000,
++    "year_to": 2010,
++    "anchor": {"type": "station", "ref": {"id": "203", "name": "해운대역"}},
++    "travel": {"mode": "walk", "max_min": 10},
++}
++
++
++def test_filter_search_passes_conditions_without_ai(plain: Rig) -> None:
++    res = plain.client.post("/api/search", json={"conditions": CONDITIONS, "base": HERE})
++
++    assert res.status_code == 200
++    body = res.json()
++    assert set(body) == {
++        "status", "notices", "chips", "relaxed", "total", "hits", "filter_panel"
++    }  # fmt: skip
++    assert body["status"] == "ok" and body["total"] == 2 and len(body["hits"]) == 2
++    assert [c["key"] for c in body["chips"]] == [
++        "works", "genres", "districts", "years", "anchor", "travel"
++    ]  # fmt: skip
++    filters, base_point = plain.searcher.calls[-1]
++    assert base_point == (35.123456, 129.123456) and "35.123456" not in res.text
++    assert filters == Filters(
++        works=(Ref("3", "해운대"),),
++        genres=("재난",),
++        districts=("해운대구",),
++        year_from=2000,
++        year_to=2010,
++        anchor=AnchorFilter("station", Ref("203", "해운대역")),
++        travel=TravelFilter("walk", 10),
++    )
++    assert plain.provider.calls == []  # type: ignore[attr-defined]
++
++
++def test_filter_search_relaxes_conditions_in_order() -> None:
++    r = rig(searcher=FakeSearcher(empty_while=("travel", "years")))
++    body = r.client.post("/api/search", json={"conditions": CONDITIONS}).json()
++
++    assert body["status"] == "ok" and body["relaxed"] == ["이동 시간", "개봉연도"]  # FR-405
++    assert "years" not in [c["key"] for c in body["chips"]]
++    r = rig(searcher=FakeSearcher(empty_while=("works",)))
++    body = r.client.post("/api/search", json={"conditions": CONDITIONS}).json()
++    assert body["status"] == "not_found" and body["hits"] == []
++    assert body["relaxed"] == ["이동 시간", "개봉연도", "장르", "구·군"]
++    assert body["filter_panel"] == FiltersModel.model_validate(CONDITIONS).model_dump()
++
++
++def test_filter_search_drops_current_anchor_without_base(plain: Rig) -> None:
++    conditions = {"anchor": {"type": "current"}, "travel": {"mode": "walk", "max_min": 10}}
++    body = plain.client.post("/api/search", json={"conditions": conditions}).json()
++
++    assert body["chips"] == [] and len(body["notices"]) == 1
++    assert plain.searcher.calls[-1][0] == Filters()
++
++
++@pytest.mark.parametrize(
++    "conditions",
++    [
++        {"genres": ["없는장르"]},
++        {"districts": ["서울"]},
++        {"year_from": 2020, "year_to": 2010},
++        {"travel": {"mode": "walk", "max_min": 0}},
++        {"works": [{"id": "", "name": "x"}]},
++        {"result_type": "sql"},
++    ],
++)
++def test_filter_search_rejects_values_outside_allowed_lists(plain: Rig, conditions: dict) -> None:
++    res = plain.client.post("/api/search", json={"conditions": conditions})
++    assert res.status_code == 422 and plain.searcher.calls == []
++
++
++def test_to_filters_keeps_any_station_and_result_type() -> None:
++    m = FiltersModel.model_validate({"anchor": {"type": "station"}, "result_type": "work"})
++    assert to_filters(m) == Filters(anchor=AnchorFilter("station"), result_type="work")
++
++
++def test_default_service_builds_without_ai_keys_or_network(monkeypatch) -> None:
++    for name in ("GEMINI_API_KEY", "OLLAMA_BASE_URL"):
++        monkeypatch.delenv(name, raising=False)
++    monkeypatch.setenv("AI_PROVIDER", "ollama")  # 주소 없는 잘못된 설정 → AI 없이 시작
++    assert isinstance(get_query_service.__wrapped__(), QueryService)
++    monkeypatch.setenv("AI_PROVIDER", "none")
++    assert isinstance(get_query_service.__wrapped__(), QueryService)
