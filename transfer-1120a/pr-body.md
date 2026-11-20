@@ -12,7 +12,7 @@ F3 · FR-301~312 · FR-701 · FR-704 · FR-707 · API-013 · API-014 · API-015 
   - AI 클라이언트는 공용 `default_llm_client()`를 씁니다(F1과 호출 한도·캐시 공유). 임베딩만 따로 만들고, 설정이 틀리면 임베딩 없이 돕니다.
   - 응답에 `sources`(출처 카드: id·provider·name·base_date·url)를 넣었습니다. 각 hit의 `source_ids`가 `sources`의 id를 가리키므로 화면에서 카드를 바로 띄울 수 있습니다(FR-704, 승근 요청). 조회는 새 `services/source_cards.py`(출처 대장 `locations.sources` 사용).
   - 기능 번호를 F3·FR-301~312로 맞췄습니다(라우터 태그 "F3 AI 탐색", 테스트 파일 `test_f3_api.py`). `query_service.py` 첫 줄의 `FR-301~412` 오타도 고쳤습니다.
-- 크기: 862줄 중 테스트가 약 350줄입니다. 질문·고르기·칩·새 대화·필터 패널이 한 라우터를 같이 써서 나누지 않았습니다.
+- 크기: 862줄 중 테스트가 412줄입니다. 질문·고르기·칩·새 대화·필터 패널이 한 라우터를 같이 써서 나누지 않았습니다.
 
 ## 테스트 방법과 결과
 - `cd backend && ruff check .` → 통과
