@@ -1,0 +1,687 @@
+From c965438b941d4a1f0446b1ff0c271e6d5c048f83 Mon Sep 17 00:00:00 2001
+From: dss06023-source <dss06023@gmail.com>
+Date: Wed, 18 Nov 2026 11:56:15 +0000
+Subject: [PATCH] =?UTF-8?q?feat:=20=EB=B6=80=EC=82=B0=EA=B5=90=ED=86=B5?=
+ =?UTF-8?q?=EA=B3=B5=EC=82=AC=20=EC=97=AD=EA=B0=84=20=EC=86=8C=EC=9A=94?=
+ =?UTF-8?q?=EC=8B=9C=EA=B0=84=20=EC=88=98=EC=A7=91=EA=B3=BC=20station=5Fti?=
+ =?UTF-8?q?me=20=EC=A0=81=EC=9E=AC=20(#ISSUE)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ backend/app/batch/collect.py                  |  31 ++++--
+ backend/app/batch/job.py                      |  25 ++++-
+ backend/app/batch/station_times.py            | 100 ++++++++++++++++++
+ backend/app/data/staging.py                   |  19 +++-
+ backend/app/data/station_times.py             |  52 +++++++++
+ .../fixtures/real/data09_getDistance.json     |   1 +
+ backend/tests/test_batch_collect.py           |  31 ++++++
+ backend/tests/test_batch_job_db.py            |  61 ++++++++++-
+ backend/tests/test_batch_station_times.py     |  73 +++++++++++++
+ backend/tests/test_station_times_db.py        |  42 ++++++++
+ db/init/05_station_time.sql                   |  17 +++
+ 11 files changed, 441 insertions(+), 11 deletions(-)
+ create mode 100644 backend/app/batch/station_times.py
+ create mode 100644 backend/app/data/station_times.py
+ create mode 100644 backend/tests/fixtures/real/data09_getDistance.json
+ create mode 100644 backend/tests/test_batch_station_times.py
+ create mode 100644 backend/tests/test_station_times_db.py
+ create mode 100644 db/init/05_station_time.sql
+
+diff --git a/backend/app/batch/collect.py b/backend/app/batch/collect.py
+index b91a311..efc8e1b 100644
+--- a/backend/app/batch/collect.py
++++ b/backend/app/batch/collect.py
+@@ -3,6 +3,8 @@
+ - DATA-01 영화 속 부산정보, DATA-02 씨네맵: 촬영지 원본
+   (작품명 opusNm, 장소명 plcNm, 개봉일·도로명주소)
+ - DATA-08 부산교통공사 역사 정보: 역 코드 scode, 역 이름 sname, 주소 saddr (호선·좌표 없음)
++- DATA-09 부산교통공사 역간 거리 및 소요시간 정보: 이웃 역 한 구간씩
++  (startSc·endSc 역 코드, time 이동 초, stoppingTime 정차 초, exchange 환승구분)
+ 공공데이터포털은 오류를 200 본문으로 줄 때가 있어 본문을 검사한다.
+ 키는 오류 메시지·로그에 남기지 않는다.
+ """
+@@ -19,6 +21,7 @@ BUSAN_SOURCES = {
+     "DATA-02": "/6260000/CineMapService/getCineMap",
+ }
+ STATION_PATH = "/B551542/stationInfo/getStationInfo"
++STATION_TIME_PATH = "/B551542/distance/getDistance"
+ PAGE_ROWS = 1000
+ RETRY_WAITS = (2, 5, 10)
+ 
+@@ -50,6 +53,19 @@ def find_items(obj: Any, marker: str) -> tuple[list[dict], int | None]:
+     return items, total
+ 
+ 
++def _api_error(body: Any) -> str | None:
++    """공공데이터포털 공통 오류 본문이면 '코드: 메시지'. 응답 객체를 넘기면 본문을 읽어 본다."""
++    if isinstance(body, httpx.Response):
++        try:
++            body = body.json()
++        except ValueError:
++            return None
++    if isinstance(body, dict) and "OpenAPI_ServiceResponse" in body:
++        head = body["OpenAPI_ServiceResponse"].get("cmmMsgHeader", {})
++        return f"API 오류 {head.get('returnReasonCode')}: {head.get('returnAuthMsg')}"
++    return None
++
++
+ async def get_json(
+     http: httpx.AsyncClient, url: str, params: dict, waits: Iterable[float] = RETRY_WAITS
+ ) -> Any:
+@@ -62,13 +78,11 @@ async def get_json(
+                 await asyncio.sleep(waits[i])
+                 continue
+             if r.status_code != 200:
+-                raise CollectError(f"HTTP {r.status_code}")
++                # 활용신청 안 된 키(코드 30)는 403 본문으로 온다(DATA-09에서 확인)
++                raise CollectError(_api_error(r) or f"HTTP {r.status_code}")
+             body = r.json()
+-            if isinstance(body, dict) and "OpenAPI_ServiceResponse" in body:
+-                head = body["OpenAPI_ServiceResponse"].get("cmmMsgHeader", {})
+-                raise CollectError(
+-                    f"API 오류 {head.get('returnReasonCode')}: {head.get('returnAuthMsg')}"
+-                )
++            if msg := _api_error(body):
++                raise CollectError(msg)
+             return body
+         except (httpx.TransportError, ValueError) as e:
+             if i >= len(waits):
+@@ -102,3 +116,8 @@ async def fetch_busan(http: httpx.AsyncClient, key: str) -> dict[str, list[dict]
+ 
+ async def fetch_stations(http: httpx.AsyncClient, key: str) -> list[dict]:
+     return await fetch_all(http, STATION_PATH, key, "scode", {"_type": "json"})
++
++
++async def fetch_station_legs(http: httpx.AsyncClient, key: str) -> list[dict]:
++    """DATA-09 역간 구간 전체. DATA-08과 같은 키를 쓰지만 활용신청은 따로 해야 한다."""
++    return await fetch_all(http, STATION_TIME_PATH, key, "startSc", {"act": "json"})
+diff --git a/backend/app/batch/job.py b/backend/app/batch/job.py
+index d7a6e6d..987f899 100644
+--- a/backend/app/batch/job.py
++++ b/backend/app/batch/job.py
+@@ -1,12 +1,14 @@
+ """C1 동기화 한 번 (FR-601~607·611~613).
+ 
+-수집 → 병합 → 역 → 좌표·최근접 역 → KMDb 매칭 → 스테이징 → 건수 가드 → 반영.
++수집 → 병합 → 역 → 역간 소요시간 → 좌표·최근접 역 → KMDb 매칭 → 스테이징 → 건수 가드 → 반영.
+ 
+ - 단계 실패는 failures에 모은다(주소·키는 남기지 않음). 수집이 통째로 실패하면 'failed'.
+ - 좌표(#25): 정확한 주소는 주소 API. 주소가 없거나 동까지만 있으면 카카오 키워드 검색을
+   쓰되, 진입점이 GEOCODE_KAKAO_KEYWORD=true일 때만 kakao를 넘긴다(기본 끔 → 위치 미확인, ADR-006).
+   지난 반영 좌표는 '같은 정확한 주소'일 때만 다시 쓴다. 키워드 검색 좌표는 매번 다시 찾는다
+   (설정을 끄면 다음 실행에서 바로 빠지고, 리포트의 출처별 건수가 맞도록).
++- 역간 소요시간(DATA-09, FR-313): 받지 못해도 실행은 계속하고 실패로만 남긴다
++  (반영 때 station_time은 지난 값을 그대로 둔다).
+ - 매칭: 관리자 검수 결과가 자동 판정보다 우선(FR-611). 같은 KMDb 작품에 두 작품이 붙으면
+   하나만 남기고 검수로 돌린다(work.kmdb_id UNIQUE).
+ """
+@@ -18,7 +20,7 @@ from dataclasses import dataclass, field
+ import asyncpg
+ import httpx
+ 
+-from app.batch import collect, kmdb, stations
++from app.batch import collect, kmdb, station_times, stations
+ from app.batch.geocode import JusoGeocoder, KakaoKeywordGeocoder, precise
+ from app.batch.merge import Merged, merge
+ from app.batch.report import Failure, GeoCounts, MatchCounts, SyncCounts, failure
+@@ -43,6 +45,7 @@ class Clients:
+ class Stats:
+     match_rule: dict = field(default_factory=dict)
+     station_located: int = 0
++    station_pairs: int = 0
+     seconds: float = 0.0
+ 
+ 
+@@ -72,6 +75,21 @@ async def _stations(c: Clients, conn, failures: list[Failure]) -> list[stations.
+     return out
+ 
+ 
++async def _station_times(
++    c: Clients, sts: list[stations.Station], failures: list[Failure]
++) -> tuple[int, list[tuple]]:
++    """(받은 구간 수, station_time 행). 수집이 실패하면 (0, [])."""
++    try:
++        rows = await collect.fetch_station_legs(c.http, c.data_go_kr_key)
++    except Exception as e:
++        failures.append(failure("station_time", e, "DATA-09"))
++        return 0, []
++    legs, skipped = station_times.parse(rows)
++    if skipped:
++        failures.append(failure("station_time", f"읽지 못한 구간 {skipped}건", "DATA-09"))
++    return len(rows), station_times.all_pairs(legs, sts)
++
++
+ async def _geocode(c: Clients, conn, m: Merged, failures: list[Failure]) -> dict[str, tuple]:
+     """name_norm → (위도, 경도, 출처 address|keyword)."""
+     cache = await staging.known_coords(conn)
+@@ -202,6 +220,7 @@ async def run(
+         m = merge(raw)
+         sts = await _stations(c, conn, failures)
+         counts.fetched["DATA-08"] = len(sts)
++        counts.fetched["DATA-09"], times = await _station_times(c, sts, failures)
+         coords = await _geocode(c, conn, m, failures)
+         works = await _match(c, conn, m, failures)
+     except Exception as e:
+@@ -221,6 +240,7 @@ async def run(
+         await staging.write_stations(
+             conn, [(s.id, s.name, s.line, s.lat, s.lon, s.gu) for s in sts]
+         )
++        await staging.write_station_times(conn, times)
+         await staging.write_works(conn, works)
+         await staging.write_locations(conn, locs)
+         await staging.write_shootings(
+@@ -234,6 +254,7 @@ async def run(
+             for r in ("score", "rule_c", "rule_u", "review")
+         },
+         station_located=len(sts),
++        station_pairs=len(times),
+         seconds=round(time.monotonic() - t0, 1),
+     )
+     log.info("동기화 %s 끝: %.1f초", run_id, stats.seconds)
+diff --git a/backend/app/batch/station_times.py b/backend/app/batch/station_times.py
+new file mode 100644
+index 0000000..03fae59
+--- /dev/null
++++ b/backend/app/batch/station_times.py
+@@ -0,0 +1,100 @@
++"""역간 소요시간 미리 계산 (FR-313, BR-12, NFR-001). 원본은 DATA-09.
++
++DATA-09(부산교통공사 역간 거리 및 소요시간 정보)는 이웃한 두 역 사이를 방향별로 한 줄씩 준다.
++  startSc·endSc 역 코드(DATA-08과 같음), time 이동 초, stoppingTime 정차 초, dist 0.1km,
++  exchange: Y = 환승 통로(같은 역의 다른 호선, 예: 서면 119 → 219 120초), N = 일반 구간
++  (포털 명세의 'N = 경전철, 빈칸 = 일반역' 설명과 달리 실제 응답은 위와 같다. 2026-11-18 응답 사본
++   tests/fixtures/real/data09_getDistance.json)
++동해선·부산김해경전철 구간과 환승 통로도 들어 있다.
++
++배치는 이 구간들로 모든 역 쌍의 최소 소요시간(분)을 구해 station_time에 넣는다.
++코스 계산(TravelTimeEstimator, R1)은 표를 읽어 찾기만 한다(app/data/station_times.py).
++- 한 구간 = 이동시간 + 정차시간. 정차시간은 출발역 기준 값이라 경로에는 출발역·중간역의
++  정차가 들어간다.
++- 환승은 원본의 환승 통로 구간만 쓴다. 이름만 같은 역(예: 1호선 좌천과 동해선 좌천)은 다른 역이라
++  잇지 않는다.
++- 반대 방향 줄이 없으면 같은 시간으로 본다. 같은 구간이 여러 번 오면 짧은 쪽을 쓴다.
++"""
++
++import heapq
++from collections.abc import Iterable, Mapping
++from dataclasses import dataclass
++
++from app.batch.stations import Station
++
++
++@dataclass(frozen=True)
++class Leg:
++    from_id: str
++    to_id: str
++    seconds: float
++
++
++def _sec(v) -> float | None:
++    try:
++        s = float(str(v).strip())
++    except (TypeError, ValueError):
++        return None
++    return s if s >= 0 else None
++
++
++def parse(rows: Iterable[Mapping]) -> tuple[list[Leg], int]:
++    """원본 줄 → 구간. 코드·이동시간이 없거나 숫자가 아닌 줄은 건너뛰고 그 수를 함께 준다."""
++    legs: list[Leg] = []
++    skipped = 0
++    for r in rows:
++        a, b = str(r.get("startSc") or "").strip(), str(r.get("endSc") or "").strip()
++        run = _sec(r.get("time"))
++        if not a or not b or a == b or run is None:
++            skipped += 1
++            continue
++        legs.append(Leg(a, b, run + (_sec(r.get("stoppingTime")) or 0.0)))
++    return legs, skipped
++
++
++def graph(legs: Iterable[Leg]) -> dict[str, dict[str, float]]:
++    """역 코드 → {이웃 역 코드: 분}."""
++    legs = list(legs)
++    given = {(leg.from_id, leg.to_id) for leg in legs}
++    g: dict[str, dict[str, float]] = {}
++
++    def add(a: str, b: str, minutes: float) -> None:
++        cur = g.setdefault(a, {}).get(b)
++        if cur is None or minutes < cur:
++            g[a][b] = minutes
++        g.setdefault(b, {})
++
++    for leg in legs:
++        add(leg.from_id, leg.to_id, leg.seconds / 60)
++        if (leg.to_id, leg.from_id) not in given:
++            add(leg.to_id, leg.from_id, leg.seconds / 60)
++    return g
++
++
++def shortest_from(g: Mapping[str, Mapping[str, float]], start: str) -> dict[str, float]:
++    """한 역에서 갈 수 있는 모든 역까지 최소 분(다익스트라)."""
++    best = {start: 0.0}
++    heap = [(0.0, start)]
++    while heap:
++        d, u = heapq.heappop(heap)
++        if d > best[u]:
++            continue
++        for v, w in g.get(u, {}).items():
++            if d + w < best.get(v, float("inf")):
++                best[v] = d + w
++                heapq.heappush(heap, (d + w, v))
++    return best
++
++
++def all_pairs(legs: Iterable[Leg], stations: Iterable[Station]) -> list[tuple[str, str, float]]:
++    """station_time 행 (출발 역, 도착 역, 분). 두 역 모두 역 목록(station 표)에 있는 쌍만 넣는다
++    (외래 키). 경로는 목록 밖 역(예: 부산 밖 2호선 양산 구간)도 지날 수 있다."""
++    g = graph(legs)
++    ids = sorted({s.id for s in stations})
++    known = set(ids)
++    out = []
++    for a in ids:
++        for b, d in sorted(shortest_from(g, a).items()):
++            if b != a and b in known:
++                out.append((a, b, round(d, 1)))
++    return out
+diff --git a/backend/app/data/staging.py b/backend/app/data/staging.py
+index 91fc51a..7087f08 100644
+--- a/backend/app/data/staging.py
++++ b/backend/app/data/staging.py
+@@ -6,6 +6,7 @@
+   (sync_record.guard_and_publish가 부른다).
+   id는 정규화 이름으로 찾아 유지하고, 이번 수집에 없는 작품·촬영지는 지운다.
+ - 이전 반영 결과 읽기: 좌표 캐시(같은 주소면 다시 부르지 않음), 관리자 검수 결과
++- 역간 소요시간(station_time)은 이번 실행에서 받았을 때만 통째로 바꾼다(FR-313)
+ """
+ 
+ import json
+@@ -16,7 +17,7 @@ import asyncpg
+ 
+ logger = logging.getLogger(__name__)
+ 
+-STG_TABLES = ("stg.shooting", "stg.work", "stg.location", "stg.station")
++STG_TABLES = ("stg.shooting", "stg.work", "stg.location", "stg.station", "stg.station_time")
+ 
+ 
+ async def reset(conn: asyncpg.Connection) -> None:
+@@ -97,6 +98,15 @@ async def write_locations(conn: asyncpg.Connection, rows: Iterable[tuple]) -> No
+     )
+ 
+ 
++async def write_station_times(conn: asyncpg.Connection, rows: Iterable[tuple]) -> None:
++    await conn.copy_records_to_table(
++        "station_time",
++        schema_name="stg",
++        records=list(rows),
++        columns=["from_id", "to_id", "minutes"],
++    )
++
++
+ async def write_shootings(conn: asyncpg.Connection, rows: Iterable[tuple]) -> None:
+     await conn.executemany(
+         "INSERT INTO stg.shooting (title_norm, name_norm, source_id, raw, base_date)"
+@@ -115,6 +125,13 @@ async def publish(conn: asyncpg.Connection) -> None:
+             lat = EXCLUDED.lat, lon = EXCLUDED.lon, gu = EXCLUDED.gu
+         """
+     )
++    # 역간 시간(DATA-09)은 이번에 받았을 때만 통째로 바꾼다. 못 받았으면 지난 값을 둔다
++    if await conn.fetchval("SELECT EXISTS (SELECT 1 FROM stg.station_time)"):
++        await conn.execute("DELETE FROM station_time")
++        await conn.execute(
++            "INSERT INTO station_time (from_id, to_id, minutes)"
++            " SELECT from_id, to_id, minutes FROM stg.station_time"
++        )
+     # kmdb_id는 UNIQUE라 작품 사이에서 옮겨 갈 수 있게 먼저 비운다(같은 트랜잭션 안)
+     await conn.execute("UPDATE work SET kmdb_id = NULL WHERE kmdb_id IS NOT NULL")
+     await conn.execute(
+diff --git a/backend/app/data/station_times.py b/backend/app/data/station_times.py
+new file mode 100644
+index 0000000..7d929cf
+--- /dev/null
++++ b/backend/app/data/station_times.py
+@@ -0,0 +1,52 @@
++"""역간 소요시간 조회 (COMP-12, FR-313, BR-12, NFR-001). 코스 계산(TravelTimeEstimator)이 쓴다.
++
++station_time은 배치가 DATA-09로 미리 계산한 '모든 역 쌍의 최소 소요시간(분)'이다
++(app/batch/station_times.py). 요청마다 경로를 찾지 않고 이 표를 한 번 읽어 찾으면 된다.
++
++BR-12 연결 방법(TravelTimeEstimator.leg):
++  도보 = 직선거리 × 1.3 ÷ 시속 4km. 도보 거리가 1km를 넘으면
++  도시철도 = 출발 촬영지 station_walk_min
++           + between(출발 촬영지 nearest_station_id, 도착 촬영지 nearest_station_id)
++           + 도착 촬영지 station_walk_min
++  과 비교해 짧은 쪽을 쓴다. 가까운 역·도보 분은 location에 이미 있다(FR-606).
++between()이 None이면(표가 비었거나 표에 없는 역) 도보만 쓴다. 2026-11-18 원본은 역 127곳이
++모두 이어진다(동해선·부산김해경전철과 환승 통로 포함).
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++
++import asyncpg
++
++
++@dataclass(frozen=True)
++class StationTimes:
++    minutes: dict[tuple[str, str], float] = field(default_factory=dict)
++
++    def between(self, from_id: str | None, to_id: str | None) -> float | None:
++        """두 역 사이 최소 분. 같은 역이면 0, 모르면 None."""
++        if not from_id or not to_id:
++            return None
++        if from_id == to_id:
++            return 0.0
++        return self.minutes.get((from_id, to_id))
++
++    def __len__(self) -> int:
++        return len(self.minutes)
++
++
++async def load(conn: asyncpg.Connection) -> StationTimes:
++    """station_time 전체(역 127곳이면 약 1만 6천 줄). 앱이 한 번 읽어 두고 쓴다."""
++    rows = await conn.fetch("SELECT from_id, to_id, minutes FROM station_time")
++    return StationTimes({(r["from_id"], r["to_id"]): float(r["minutes"]) for r in rows})
++
++
++async def between(conn: asyncpg.Connection, from_id: str, to_id: str) -> float | None:
++    """한 쌍만 필요할 때."""
++    if from_id == to_id:
++        return 0.0
++    v = await conn.fetchval(
++        "SELECT minutes FROM station_time WHERE from_id = $1 AND to_id = $2", from_id, to_id
++    )
++    return float(v) if v is not None else None
+diff --git a/backend/tests/fixtures/real/data09_getDistance.json b/backend/tests/fixtures/real/data09_getDistance.json
+new file mode 100644
+index 0000000..59de025
+--- /dev/null
++++ b/backend/tests/fixtures/real/data09_getDistance.json
+@@ -0,0 +1 @@
++{"header":{"resultCode":"00","resultMsg":"NORMAL SERVICE."},"body":{"items":{"item":[{"startSn":"동매","startSc":"100","endSn":"신평","endSc":"101","dist":"17","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"동매","startSc":"100","endSn":"장림","endSc":"99","dist":"12","time":"180","stoppingTime":"20","exchange":"N"},{"startSn":"신평","startSc":"101","endSn":"동매","endSc":"100","dist":"17","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"신평","startSc":"101","endSn":"하단","endSc":"102","dist":"16","time":"140","stoppingTime":"0","exchange":"N"},{"startSn":"하단","startSc":"102","endSn":"신평","endSc":"101","dist":"16","time":"150","stoppingTime":"30","exchange":"N"},{"startSn":"하단","startSc":"102","endSn":"당리","endSc":"103","dist":"8","time":"70","stoppingTime":"30","exchange":"N"},{"startSn":"당리","startSc":"103","endSn":"하단","endSc":"102","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"당리","startSc":"103","endSn":"사하","endSc":"104","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"사하","startSc":"104","endSn":"당리","endSc":"103","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"사하","startSc":"104","endSn":"괴정","endSc":"105","dist":"9","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"괴정","startSc":"105","endSn":"사하","endSc":"104","dist":"9","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"괴정","startSc":"105","endSn":"대티","endSc":"106","dist":"8","time":"65","stoppingTime":"30","exchange":"N"},{"startSn":"대티","startSc":"106","endSn":"괴정","endSc":"105","dist":"8","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"대티","startSc":"106","endSn":"서대신","endSc":"107","dist":"14","time":"110","stoppingTime":"20","exchange":"N"},{"startSn":"서대신","startSc":"107","endSn":"대티","endSc":"106","dist":"14","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"서대신","startSc":"107","endSn":"동대신","endSc":"108","dist":"7","time":"125","stoppingTime":"20","exchange":"N"},{"startSn":"동대신","startSc":"108","endSn":"서대신","endSc":"107","dist":"7","time":"130","stoppingTime":"20","exchange":"N"},{"startSn":"동대신","startSc":"108","endSn":"토성","endSc":"109","dist":"12","time":"115","stoppingTime":"20","exchange":"N"},{"startSn":"토성","startSc":"109","endSn":"동대신","endSc":"108","dist":"12","time":"125","stoppingTime":"20","exchange":"N"},{"startSn":"토성","startSc":"109","endSn":"자갈치","endSc":"110","dist":"10","time":"110","stoppingTime":"20","exchange":"N"},{"startSn":"자갈치","startSc":"110","endSn":"토성","endSc":"109","dist":"10","time":"110","stoppingTime":"30","exchange":"N"},{"startSn":"자갈치","startSc":"110","endSn":"남포","endSc":"111","dist":"7","time":"65","stoppingTime":"30","exchange":"N"},{"startSn":"남포","startSc":"111","endSn":"자갈치","endSc":"110","dist":"7","time":"65","stoppingTime":"30","exchange":"N"},{"startSn":"남포","startSc":"111","endSn":"중앙","endSc":"112","dist":"9","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"중앙","startSc":"112","endSn":"남포","endSc":"111","dist":"9","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"중앙","startSc":"112","endSn":"부산","endSc":"113","dist":"11","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"부산","startSc":"113","endSn":"중앙","endSc":"112","dist":"11","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"부산","startSc":"113","endSn":"초량","endSc":"114","dist":"8","time":"70","stoppingTime":"30","exchange":"N"},{"startSn":"초량","startSc":"114","endSn":"부산","endSc":"113","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"초량","startSc":"114","endSn":"부산진","endSc":"115","dist":"8","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"부산진","startSc":"115","endSn":"초량","endSc":"114","dist":"8","time":"65","stoppingTime":"30","exchange":"N"},{"startSn":"부산진","startSc":"115","endSn":"좌천","endSc":"116","dist":"10","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"좌천","startSc":"116","endSn":"부산진","endSc":"115","dist":"10","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"좌천","startSc":"116","endSn":"범일","endSc":"117","dist":"9","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"범일","startSc":"117","endSn":"좌천","endSc":"116","dist":"9","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"범일","startSc":"117","endSn":"범내골","endSc":"118","dist":"8","time":"65","stoppingTime":"30","exchange":"N"},{"startSn":"범내골","startSc":"118","endSn":"범일","endSc":"117","dist":"8","time":"70","stoppingTime":"30","exchange":"N"},{"startSn":"범내골","startSc":"118","endSn":"서면","endSc":"119","dist":"12","time":"100","stoppingTime":"30","exchange":"N"},{"startSn":"서면","startSc":"119","endSn":"범내골","endSc":"118","dist":"12","time":"85","stoppingTime":"50","exchange":"N"},{"startSn":"서면","startSc":"119","endSn":"부전","endSc":"120","dist":"6","time":"65","stoppingTime":"50","exchange":"N"},{"startSn":"서면","startSc":"119","endSn":"서면","endSc":"219","dist":"1","time":"120","stoppingTime":"0","exchange":"Y"},{"startSn":"부전","startSc":"120","endSn":"서면","endSc":"119","dist":"6","time":"65","stoppingTime":"50","exchange":"N"},{"startSn":"부전","startSc":"120","endSn":"양정","endSc":"121","dist":"14","time":"95","stoppingTime":"30","exchange":"N"},{"startSn":"부전","startSc":"120","endSn":"부전","endSc":"801","dist":"5","time":"480","stoppingTime":"0","exchange":"Y"},{"startSn":"양정","startSc":"121","endSn":"부전","endSc":"120","dist":"14","time":"95","stoppingTime":"30","exchange":"N"},{"startSn":"양정","startSc":"121","endSn":"시청","endSc":"122","dist":"8","time":"70","stoppingTime":"30","exchange":"N"},{"startSn":"시청","startSc":"122","endSn":"양정","endSc":"121","dist":"8","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"시청","startSc":"122","endSn":"연산","endSc":"123","dist":"9","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"연산","startSc":"123","endSn":"시청","endSc":"122","dist":"9","time":"75","stoppingTime":"50","exchange":"N"},{"startSn":"연산","startSc":"123","endSn":"교대","endSc":"124","dist":"10","time":"85","stoppingTime":"50","exchange":"N"},{"startSn":"연산","startSc":"123","endSn":"연산","endSc":"305","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"교대","startSc":"124","endSn":"연산","endSc":"123","dist":"10","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"교대","startSc":"124","endSn":"동래","endSc":"125","dist":"12","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"교대","startSc":"124","endSn":"교대","endSc":"804","dist":"3","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"동래","startSc":"125","endSn":"교대","endSc":"124","dist":"12","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"동래","startSc":"125","endSn":"명륜","endSc":"126","dist":"8","time":"70","stoppingTime":"30","exchange":"N"},{"startSn":"동래","startSc":"125","endSn":"동래","endSc":"402","dist":"3","time":"360","stoppingTime":"0","exchange":"Y"},{"startSn":"명륜","startSc":"126","endSn":"동래","endSc":"125","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"명륜","startSc":"126","endSn":"온천장","endSc":"127","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"온천장","startSc":"127","endSn":"명륜","endSc":"126","dist":"10","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"온천장","startSc":"127","endSn":"부산대","endSc":"128","dist":"11","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"부산대","startSc":"128","endSn":"온천장","endSc":"127","dist":"11","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"부산대","startSc":"128","endSn":"장전","endSc":"129","dist":"10","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"장전","startSc":"129","endSn":"부산대","endSc":"128","dist":"10","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"장전","startSc":"129","endSn":"구서","endSc":"130","dist":"11","time":"95","stoppingTime":"30","exchange":"N"},{"startSn":"구서","startSc":"130","endSn":"장전","endSc":"129","dist":"11","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"구서","startSc":"130","endSn":"두실","endSc":"131","dist":"10","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"두실","startSc":"131","endSn":"구서","endSc":"130","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"두실","startSc":"131","endSn":"남산","endSc":"132","dist":"10","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"남산","startSc":"132","endSn":"두실","endSc":"131","dist":"10","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"남산","startSc":"132","endSn":"범어사","endSc":"133","dist":"9","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"범어사","startSc":"133","endSn":"남산","endSc":"132","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"범어사","startSc":"133","endSn":"노포","endSc":"134","dist":"12","time":"125","stoppingTime":"20","exchange":"N"},{"startSn":"노포","startSc":"134","endSn":"범어사","endSc":"133","dist":"12","time":"110","stoppingTime":"0","exchange":"N"},{"startSn":"장산","startSc":"201","endSn":"중동","endSc":"202","dist":"9","time":"90","stoppingTime":"0","exchange":"N"},{"startSn":"중동","startSc":"202","endSn":"장산","endSc":"201","dist":"9","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"중동","startSc":"202","endSn":"해운대","endSc":"203","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"해운대","startSc":"203","endSn":"중동","endSc":"202","dist":"9","time":"85","stoppingTime":"30","exchange":"N"},{"startSn":"해운대","startSc":"203","endSn":"동백","endSc":"204","dist":"12","time":"105","stoppingTime":"30","exchange":"N"},{"startSn":"동백","startSc":"204","endSn":"해운대","endSc":"203","dist":"12","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"동백","startSc":"204","endSn":"벡스코","endSc":"205","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"벡스코","startSc":"205","endSn":"동백","endSc":"204","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"벡스코","startSc":"205","endSn":"센텀시티","endSc":"206","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"벡스코","startSc":"205","endSn":"벡스코","endSc":"810","dist":"4","time":"360","stoppingTime":"0","exchange":"Y"},{"startSn":"센텀시티","startSc":"206","endSn":"벡스코","endSc":"205","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"센텀시티","startSc":"206","endSn":"민락","endSc":"207","dist":"10","time":"100","stoppingTime":"20","exchange":"N"},{"startSn":"민락","startSc":"207","endSn":"센텀시티","endSc":"206","dist":"10","time":"100","stoppingTime":"20","exchange":"N"},{"startSn":"민락","startSc":"207","endSn":"수영","endSc":"208","dist":"9","time":"135","stoppingTime":"20","exchange":"N"},{"startSn":"수영","startSc":"208","endSn":"민락","endSc":"207","dist":"9","time":"125","stoppingTime":"30","exchange":"N"},{"startSn":"수영","startSc":"208","endSn":"광안","endSc":"209","dist":"9","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"수영","startSc":"208","endSn":"수영","endSc":"301","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"광안","startSc":"209","endSn":"수영","endSc":"208","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"광안","startSc":"209","endSn":"금련산","endSc":"210","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"금련산","startSc":"210","endSn":"광안","endSc":"209","dist":"9","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"금련산","startSc":"210","endSn":"남천","endSc":"211","dist":"9","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"남천","startSc":"211","endSn":"금련산","endSc":"210","dist":"9","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"남천","startSc":"211","endSn":"경성대.부경대","endSc":"212","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"경성대.부경대","startSc":"212","endSn":"남천","endSc":"211","dist":"8","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"경성대.부경대","startSc":"212","endSn":"대연","endSc":"213","dist":"9","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"대연","startSc":"213","endSn":"경성대.부경대","endSc":"212","dist":"9","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"대연","startSc":"213","endSn":"못골","endSc":"214","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"못골","startSc":"214","endSn":"대연","endSc":"213","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"못골","startSc":"214","endSn":"지게골","endSc":"215","dist":"9","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"지게골","startSc":"215","endSn":"못골","endSc":"214","dist":"9","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"지게골","startSc":"215","endSn":"문현","endSc":"216","dist":"8","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"문현","startSc":"216","endSn":"지게골","endSc":"215","dist":"8","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"문현","startSc":"216","endSn":"국제금융센터 부산은행","endSc":"217","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"국제금융센터 부산은행","startSc":"217","endSn":"문현","endSc":"216","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"국제금융센터 부산은행","startSc":"217","endSn":"전포","endSc":"218","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"전포","startSc":"218","endSn":"국제금융센터 부산은행","endSc":"217","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"전포","startSc":"218","endSn":"서면","endSc":"219","dist":"11","time":"115","stoppingTime":"20","exchange":"N"},{"startSn":"서면","startSc":"219","endSn":"서면","endSc":"119","dist":"1","time":"120","stoppingTime":"0","exchange":"Y"},{"startSn":"서면","startSc":"219","endSn":"전포","endSc":"218","dist":"11","time":"115","stoppingTime":"50","exchange":"N"},{"startSn":"서면","startSc":"219","endSn":"부암","endSc":"220","dist":"8","time":"80","stoppingTime":"50","exchange":"N"},{"startSn":"부암","startSc":"220","endSn":"서면","endSc":"219","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"부암","startSc":"220","endSn":"가야","endSc":"221","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"가야","startSc":"221","endSn":"부암","endSc":"220","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"가야","startSc":"221","endSn":"동의대","endSc":"222","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"동의대","startSc":"222","endSn":"가야","endSc":"221","dist":"9","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"동의대","startSc":"222","endSn":"개금","endSc":"223","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"개금","startSc":"223","endSn":"동의대","endSc":"222","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"개금","startSc":"223","endSn":"냉정","endSc":"224","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"냉정","startSc":"224","endSn":"개금","endSc":"223","dist":"8","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"냉정","startSc":"224","endSn":"주례","endSc":"225","dist":"9","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"주례","startSc":"225","endSn":"냉정","endSc":"224","dist":"9","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"주례","startSc":"225","endSn":"감전","endSc":"226","dist":"12","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"감전","startSc":"226","endSn":"주례","endSc":"225","dist":"12","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"감전","startSc":"226","endSn":"사상","endSc":"227","dist":"11","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"사상","startSc":"227","endSn":"감전","endSc":"226","dist":"11","time":"105","stoppingTime":"30","exchange":"N"},{"startSn":"사상","startSc":"227","endSn":"덕포","endSc":"228","dist":"12","time":"105","stoppingTime":"30","exchange":"N"},{"startSn":"사상","startSc":"227","endSn":"사상","endSc":"901","dist":"0","time":"300","stoppingTime":"0","exchange":"Y"},{"startSn":"덕포","startSc":"228","endSn":"사상","endSc":"227","dist":"12","time":"110","stoppingTime":"20","exchange":"N"},{"startSn":"덕포","startSc":"228","endSn":"모덕","endSc":"229","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"모덕","startSc":"229","endSn":"덕포","endSc":"228","dist":"8","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"모덕","startSc":"229","endSn":"모라","endSc":"230","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"모라","startSc":"230","endSn":"모덕","endSc":"229","dist":"10","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"모라","startSc":"230","endSn":"구남","endSc":"231","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"구남","startSc":"231","endSn":"모라","endSc":"230","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"구남","startSc":"231","endSn":"구명","endSc":"232","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"구명","startSc":"232","endSn":"구남","endSc":"231","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"구명","startSc":"232","endSn":"덕천","endSc":"233","dist":"12","time":"130","stoppingTime":"20","exchange":"N"},{"startSn":"덕천","startSc":"233","endSn":"구명","endSc":"232","dist":"12","time":"125","stoppingTime":"30","exchange":"N"},{"startSn":"덕천","startSc":"233","endSn":"수정","endSc":"234","dist":"15","time":"125","stoppingTime":"30","exchange":"N"},{"startSn":"덕천","startSc":"233","endSn":"덕천","endSc":"313","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"수정","startSc":"234","endSn":"덕천","endSc":"233","dist":"15","time":"125","stoppingTime":"20","exchange":"N"},{"startSn":"수정","startSc":"234","endSn":"화명","endSc":"235","dist":"15","time":"130","stoppingTime":"20","exchange":"N"},{"startSn":"화명","startSc":"235","endSn":"수정","endSc":"234","dist":"15","time":"125","stoppingTime":"30","exchange":"N"},{"startSn":"화명","startSc":"235","endSn":"율리","endSc":"236","dist":"12","time":"100","stoppingTime":"30","exchange":"N"},{"startSn":"율리","startSc":"236","endSn":"화명","endSc":"235","dist":"12","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"율리","startSc":"236","endSn":"동원","endSc":"237","dist":"15","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"동원","startSc":"237","endSn":"율리","endSc":"236","dist":"15","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"동원","startSc":"237","endSn":"금곡","endSc":"238","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"금곡","startSc":"238","endSn":"동원","endSc":"237","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"금곡","startSc":"238","endSn":"호포","endSc":"239","dist":"15","time":"145","stoppingTime":"20","exchange":"N"},{"startSn":"호포","startSc":"239","endSn":"금곡","endSc":"238","dist":"15","time":"130","stoppingTime":"0","exchange":"N"},{"startSn":"호포","startSc":"239","endSn":"증산","endSc":"240","dist":"35","time":"280","stoppingTime":"20","exchange":"N"},{"startSn":"증산","startSc":"240","endSn":"호포","endSc":"239","dist":"35","time":"280","stoppingTime":"0","exchange":"N"},{"startSn":"증산","startSc":"240","endSn":"부산대양산캠퍼스","endSc":"241","dist":"10","time":"90","stoppingTime":"0","exchange":"N"},{"startSn":"부산대양산캠퍼스","startSc":"241","endSn":"증산","endSc":"240","dist":"10","time":"90","stoppingTime":"0","exchange":"N"},{"startSn":"부산대양산캠퍼스","startSc":"241","endSn":"남양산","endSc":"242","dist":"11","time":"100","stoppingTime":"0","exchange":"N"},{"startSn":"남양산","startSc":"242","endSn":"부산대양산캠퍼스","endSc":"241","dist":"11","time":"100","stoppingTime":"30","exchange":"N"},{"startSn":"남양산","startSc":"242","endSn":"양산","endSc":"243","dist":"16","time":"140","stoppingTime":"30","exchange":"N"},{"startSn":"양산","startSc":"243","endSn":"남양산","endSc":"242","dist":"16","time":"140","stoppingTime":"0","exchange":"N"},{"startSn":"수영","startSc":"301","endSn":"수영","endSc":"208","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"수영","startSc":"301","endSn":"망미","endSc":"302","dist":"10","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"망미","startSc":"302","endSn":"수영","endSc":"301","dist":"10","time":"125","stoppingTime":"20","exchange":"N"},{"startSn":"망미","startSc":"302","endSn":"배산","endSc":"303","dist":"12","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"배산","startSc":"303","endSn":"망미","endSc":"302","dist":"12","time":"100","stoppingTime":"20","exchange":"N"},{"startSn":"배산","startSc":"303","endSn":"물만골","endSc":"304","dist":"11","time":"115","stoppingTime":"20","exchange":"N"},{"startSn":"물만골","startSc":"304","endSn":"배산","endSc":"303","dist":"11","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"물만골","startSc":"304","endSn":"연산","endSc":"305","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"연산","startSc":"305","endSn":"연산","endSc":"123","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"연산","startSc":"305","endSn":"물만골","endSc":"304","dist":"11","time":"100","stoppingTime":"50","exchange":"N"},{"startSn":"연산","startSc":"305","endSn":"거제","endSc":"306","dist":"7","time":"70","stoppingTime":"50","exchange":"N"},{"startSn":"거제","startSc":"306","endSn":"연산","endSc":"305","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"거제","startSc":"306","endSn":"종합운동장","endSc":"307","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"거제","startSc":"306","endSn":"거제","endSc":"803","dist":"3","time":"300","stoppingTime":"0","exchange":"Y"},{"startSn":"종합운동장","startSc":"307","endSn":"거제","endSc":"306","dist":"7","time":"75","stoppingTime":"30","exchange":"N"},{"startSn":"종합운동장","startSc":"307","endSn":"사직","endSc":"308","dist":"8","time":"80","stoppingTime":"30","exchange":"N"},{"startSn":"사직","startSc":"308","endSn":"종합운동장","endSc":"307","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"사직","startSc":"308","endSn":"미남","endSc":"309","dist":"8","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"미남","startSc":"309","endSn":"사직","endSc":"308","dist":"8","time":"95","stoppingTime":"30","exchange":"N"},{"startSn":"미남","startSc":"309","endSn":"만덕","endSc":"310","dist":"33","time":"230","stoppingTime":"30","exchange":"N"},{"startSn":"미남","startSc":"309","endSn":"미남","endSc":"401","dist":"2","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"만덕","startSc":"310","endSn":"미남","endSc":"309","dist":"33","time":"235","stoppingTime":"20","exchange":"N"},{"startSn":"만덕","startSc":"310","endSn":"남산정","endSc":"311","dist":"11","time":"100","stoppingTime":"20","exchange":"N"},{"startSn":"남산정","startSc":"311","endSn":"만덕","endSc":"310","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"남산정","startSc":"311","endSn":"숙등","endSc":"312","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"숙등","startSc":"312","endSn":"남산정","endSc":"311","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"숙등","startSc":"312","endSn":"덕천","endSc":"313","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"덕천","startSc":"313","endSn":"덕천","endSc":"233","dist":"1","time":"180","stoppingTime":"0","exchange":"Y"},{"startSn":"덕천","startSc":"313","endSn":"숙등","endSc":"312","dist":"7","time":"65","stoppingTime":"50","exchange":"N"},{"startSn":"덕천","startSc":"313","endSn":"구포","endSc":"314","dist":"11","time":"110","stoppingTime":"50","exchange":"N"},{"startSn":"구포","startSc":"314","endSn":"덕천","endSc":"313","dist":"11","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"구포","startSc":"314","endSn":"강서구청","endSc":"315","dist":"16","time":"145","stoppingTime":"20","exchange":"N"},{"startSn":"강서구청","startSc":"315","endSn":"구포","endSc":"314","dist":"16","time":"135","stoppingTime":"20","exchange":"N"},{"startSn":"강서구청","startSc":"315","endSn":"체육공원","endSc":"316","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"체육공원","startSc":"316","endSn":"강서구청","endSc":"315","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"체육공원","startSc":"316","endSn":"대저","endSc":"317","dist":"8","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"대저","startSc":"317","endSn":"체육공원","endSc":"316","dist":"8","time":"75","stoppingTime":"0","exchange":"N"},{"startSn":"대저","startSc":"317","endSn":"대저","endSc":"907","dist":"0","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"미남","startSc":"401","endSn":"미남","endSc":"309","dist":"2","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"미남","startSc":"401","endSn":"동래","endSc":"402","dist":"10","time":"105","stoppingTime":"25","exchange":"N"},{"startSn":"동래","startSc":"402","endSn":"동래","endSc":"125","dist":"3","time":"360","stoppingTime":"0","exchange":"Y"},{"startSn":"동래","startSc":"402","endSn":"미남","endSc":"401","dist":"10","time":"110","stoppingTime":"25","exchange":"N"},{"startSn":"동래","startSc":"402","endSn":"수안","endSc":"403","dist":"7","time":"70","stoppingTime":"25","exchange":"N"},{"startSn":"수안","startSc":"403","endSn":"동래","endSc":"402","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"수안","startSc":"403","endSn":"낙민","endSc":"404","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"낙민","startSc":"404","endSn":"수안","endSc":"403","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"낙민","startSc":"404","endSn":"충렬사","endSc":"405","dist":"7","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"충렬사","startSc":"405","endSn":"낙민","endSc":"404","dist":"7","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"충렬사","startSc":"405","endSn":"명장","endSc":"406","dist":"7","time":"75","stoppingTime":"20","exchange":"N"},{"startSn":"명장","startSc":"406","endSn":"충렬사","endSc":"405","dist":"7","time":"70","stoppingTime":"20","exchange":"N"},{"startSn":"명장","startSc":"406","endSn":"서동","endSc":"407","dist":"10","time":"115","stoppingTime":"20","exchange":"N"},{"startSn":"서동","startSc":"407","endSn":"명장","endSc":"406","dist":"10","time":"115","stoppingTime":"20","exchange":"N"},{"startSn":"서동","startSc":"407","endSn":"금사","endSc":"408","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"금사","startSc":"408","endSn":"서동","endSc":"407","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"금사","startSc":"408","endSn":"반여농산물시장","endSc":"409","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"반여농산물시장","startSc":"409","endSn":"금사","endSc":"408","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"반여농산물시장","startSc":"409","endSn":"석대","endSc":"410","dist":"12","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"석대","startSc":"410","endSn":"반여농산물시장","endSc":"409","dist":"12","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"석대","startSc":"410","endSn":"영산대","endSc":"411","dist":"14","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"영산대","startSc":"411","endSn":"석대","endSc":"410","dist":"14","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"영산대","startSc":"411","endSn":"윗반송","endSc":"412","dist":"11","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"윗반송","startSc":"412","endSn":"영산대","endSc":"411","dist":"11","time":"105","stoppingTime":"20","exchange":"N"},{"startSn":"윗반송","startSc":"412","endSn":"고촌","endSc":"413","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"고촌","startSc":"413","endSn":"윗반송","endSc":"412","dist":"8","time":"80","stoppingTime":"20","exchange":"N"},{"startSn":"고촌","startSc":"413","endSn":"안평","endSc":"414","dist":"11","time":"110","stoppingTime":"20","exchange":"N"},{"startSn":"안평","startSc":"414","endSn":"고촌","endSc":"413","dist":"11","time":"105","stoppingTime":"30","exchange":"N"},{"startSn":"부전","startSc":"801","endSn":"부전","endSc":"120","dist":"5","time":"480","stoppingTime":"0","exchange":"Y"},{"startSn":"부전","startSc":"801","endSn":"거제해맞이","endSc":"802","dist":"23","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"거제해맞이","startSc":"802","endSn":"부전(동해선)","endSc":"801","dist":"23","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"거제해맞이","startSc":"802","endSn":"거제","endSc":"803","dist":"10","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"거제","startSc":"803","endSn":"거제","endSc":"306","dist":"3","time":"300","stoppingTime":"0","exchange":"Y"},{"startSn":"거제","startSc":"803","endSn":"거제해맞이","endSc":"802","dist":"10","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"거제","startSc":"803","endSn":"교대","endSc":"804","dist":"7","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"교대","startSc":"804","endSn":"교대","endSc":"124","dist":"3","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"교대","startSc":"804","endSn":"거제","endSc":"803","dist":"7","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"교대","startSc":"804","endSn":"동래(동해선)","endSc":"805","dist":"12","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"동래(동해선)","startSc":"805","endSn":"교대","endSc":"804","dist":"12","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"동래(동해선)","startSc":"805","endSn":"안락","endSc":"806","dist":"9","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"안락","startSc":"806","endSn":"동래(동해선)","endSc":"805","dist":"9","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"안락","startSc":"806","endSn":"부산원동","endSc":"807","dist":"12","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"부산원동","startSc":"807","endSn":"안락","endSc":"806","dist":"12","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"부산원동","startSc":"807","endSn":"재송","endSc":"808","dist":"11","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"재송","startSc":"808","endSn":"부산원동","endSc":"807","dist":"11","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"재송","startSc":"808","endSn":"센텀","endSc":"809","dist":"10","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"센텀","startSc":"809","endSn":"재송","endSc":"808","dist":"10","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"센텀","startSc":"809","endSn":"벡스코","endSc":"810","dist":"14","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"벡스코","startSc":"810","endSn":"벡스코","endSc":"205","dist":"4","time":"360","stoppingTime":"0","exchange":"Y"},{"startSn":"벡스코","startSc":"810","endSn":"센텀","endSc":"809","dist":"14","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"벡스코","startSc":"810","endSn":"신해운대","endSc":"811","dist":"45","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"신해운대","startSc":"811","endSn":"벡스코","endSc":"810","dist":"45","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"신해운대","startSc":"811","endSn":"송정","endSc":"812","dist":"29","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"송정","startSc":"812","endSn":"신해운대","endSc":"811","dist":"29","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"송정","startSc":"812","endSn":"오시리아","endSc":"813","dist":"11","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"오시리아","startSc":"813","endSn":"송정","endSc":"812","dist":"11","time":"120","stoppingTime":"30","exchange":"N"},{"startSn":"오시리아","startSc":"813","endSn":"기장","endSc":"814","dist":"57","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"기장","startSc":"814","endSn":"오시리아","endSc":"813","dist":"57","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"기장","startSc":"814","endSn":"일광","endSc":"815","dist":"30","time":"150","stoppingTime":"30","exchange":"N"},{"startSn":"일광","startSc":"815","endSn":"기장","endSc":"814","dist":"30","time":"90","stoppingTime":"30","exchange":"N"},{"startSn":"일광","startSc":"815","endSn":"좌천","endSc":"816","dist":"51","time":"270","stoppingTime":"30","exchange":"N"},{"startSn":"좌천","startSc":"816","endSn":"일광","endSc":"815","dist":"51","time":"270","stoppingTime":"30","exchange":"N"},{"startSn":"좌천","startSc":"816","endSn":"월내","endSc":"817","dist":"35","time":"210","stoppingTime":"30","exchange":"N"},{"startSn":"월내","startSc":"817","endSn":"좌천","endSc":"816","dist":"35","time":"270","stoppingTime":"30","exchange":"N"},{"startSn":"월내","startSc":"817","endSn":"서생","endSc":"818","dist":"26","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"서생","startSc":"818","endSn":"월내","endSc":"817","dist":"26","time":"180","stoppingTime":"30","exchange":"N"},{"startSn":"서생","startSc":"818","endSn":"남창","endSc":"819","dist":"84","time":"420","stoppingTime":"30","exchange":"N"},{"startSn":"남창","startSc":"819","endSn":"서생","endSc":"818","dist":"84","time":"420","stoppingTime":"30","exchange":"N"},{"startSn":"남창","startSc":"819","endSn":"망양","endSc":"820","dist":"44","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"망양","startSc":"820","endSn":"남창","endSc":"819","dist":"44","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"망양","startSc":"820","endSn":"덕하","endSc":"821","dist":"45","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"덕하","startSc":"821","endSn":"망양","endSc":"820","dist":"45","time":"240","stoppingTime":"30","exchange":"N"},{"startSn":"덕하","startSc":"821","endSn":"개운포","endSc":"822","dist":"24","time":"150","stoppingTime":"30","exchange":"N"},{"startSn":"개운포","startSc":"822","endSn":"덕하","endSc":"821","dist":"24","time":"150","stoppingTime":"30","exchange":"N"},{"startSn":"개운포","startSc":"822","endSn":"태화강","endSc":"823","dist":"49","time":"270","stoppingTime":"30","exchange":"N"},{"startSn":"태화강","startSc":"823","endSn":"개운포","endSc":"822","dist":"49","time":"270","stoppingTime":"0","exchange":"N"},{"startSn":"사상","startSc":"901","endSn":"사상","endSc":"227","dist":"0","time":"300","stoppingTime":"0","exchange":"Y"},{"startSn":"사상","startSc":"901","endSn":"괘법 르네시떼","endSc":"902","dist":"8","time":"68","stoppingTime":"20","exchange":"N"},{"startSn":"괘법 르네시떼","startSc":"902","endSn":"사상","endSc":"901","dist":"8","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"괘법 르네시떼","startSc":"902","endSn":"서부산 유통지구","endSc":"903","dist":"23","time":"163","stoppingTime":"20","exchange":"N"},{"startSn":"서부산 유통지구","startSc":"903","endSn":"괘법 르네시떼","endSc":"902","dist":"23","time":"162","stoppingTime":"20","exchange":"N"},{"startSn":"서부산 유통지구","startSc":"903","endSn":"김해공항","endSc":"904","dist":"9","time":"97","stoppingTime":"20","exchange":"N"},{"startSn":"김해공항","startSc":"904","endSn":"서부산 유통지구","endSc":"903","dist":"9","time":"102","stoppingTime":"20","exchange":"N"},{"startSn":"김해공항","startSc":"904","endSn":"덕두","endSc":"905","dist":"13","time":"124","stoppingTime":"20","exchange":"N"},{"startSn":"덕두","startSc":"905","endSn":"김해공항","endSc":"904","dist":"13","time":"127","stoppingTime":"20","exchange":"N"},{"startSn":"덕두","startSc":"905","endSn":"등구","endSc":"906","dist":"19","time":"141","stoppingTime":"20","exchange":"N"},{"startSn":"등구","startSc":"906","endSn":"덕두","endSc":"905","dist":"19","time":"140","stoppingTime":"20","exchange":"N"},{"startSn":"등구","startSc":"906","endSn":"대저","endSc":"907","dist":"20","time":"153","stoppingTime":"20","exchange":"N"},{"startSn":"대저","startSc":"907","endSn":"대저","endSc":"317","dist":"0","time":"240","stoppingTime":"0","exchange":"Y"},{"startSn":"대저","startSc":"907","endSn":"등구","endSc":"906","dist":"20","time":"151","stoppingTime":"20","exchange":"N"},{"startSn":"대저","startSc":"907","endSn":"평강","endSc":"908","dist":"10","time":"81","stoppingTime":"20","exchange":"N"},{"startSn":"평강","startSc":"908","endSn":"대저","endSc":"907","dist":"10","time":"82","stoppingTime":"20","exchange":"N"},{"startSn":"평강","startSc":"908","endSn":"대사","endSc":"909","dist":"12","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"대사","startSc":"909","endSn":"평강","endSc":"908","dist":"12","time":"96","stoppingTime":"20","exchange":"N"},{"startSn":"대사","startSc":"909","endSn":"불암","endSc":"910","dist":"11","time":"90","stoppingTime":"20","exchange":"N"},{"startSn":"불암","startSc":"910","endSn":"대사","endSc":"909","dist":"11","time":"88","stoppingTime":"20","exchange":"N"},{"startSn":"불암","startSc":"910","endSn":"지내","endSc":"911","dist":"7","time":"67","stoppingTime":"20","exchange":"N"},{"startSn":"지내","startSc":"911","endSn":"불암","endSc":"910","dist":"7","time":"69","stoppingTime":"20","exchange":"N"},{"startSn":"지내","startSc":"911","endSn":"김해대학","endSc":"912","dist":"8","time":"74","stoppingTime":"20","exchange":"N"},{"startSn":"김해대학","startSc":"912","endSn":"지내","endSc":"911","dist":"8","time":"74","stoppingTime":"20","exchange":"N"},{"startSn":"김해대학","startSc":"912","endSn":"인제대","endSc":"913","dist":"13","time":"100","stoppingTime":"20","exchange":"N"},{"startSn":"인제대","startSc":"913","endSn":"김해대학","endSc":"912","dist":"13","time":"98","stoppingTime":"20","exchange":"N"},{"startSn":"인제대","startSc":"913","endSn":"김해시청","endSc":"914","dist":"10","time":"85","stoppingTime":"20","exchange":"N"},{"startSn":"김해시청","startSc":"914","endSn":"인제대","endSc":"913","dist":"10","time":"84","stoppingTime":"20","exchange":"N"},{"startSn":"김해시청","startSc":"914","endSn":"부원","endSc":"915","dist":"6","time":"63","stoppingTime":"20","exchange":"N"},{"startSn":"부원","startSc":"915","endSn":"김해시청","endSc":"914","dist":"6","time":"66","stoppingTime":"20","exchange":"N"},{"startSn":"부원","startSc":"915","endSn":"봉황","endSc":"916","dist":"10","time":"96","stoppingTime":"20","exchange":"N"},{"startSn":"봉황","startSc":"916","endSn":"부원","endSc":"915","dist":"10","time":"97","stoppingTime":"20","exchange":"N"},{"startSn":"봉황","startSc":"916","endSn":"수로왕릉","endSc":"917","dist":"7","time":"71","stoppingTime":"20","exchange":"N"},{"startSn":"수로왕릉","startSc":"917","endSn":"봉황","endSc":"916","dist":"7","time":"66","stoppingTime":"20","exchange":"N"},{"startSn":"수로왕릉","startSc":"917","endSn":"박물관","endSc":"918","dist":"8","time":"73","stoppingTime":"20","exchange":"N"},{"startSn":"박물관","startSc":"918","endSn":"수로왕릉","endSc":"917","dist":"8","time":"72","stoppingTime":"20","exchange":"N"},{"startSn":"박물관","startSc":"918","endSn":"연지공원","endSc":"919","dist":"11","time":"95","stoppingTime":"20","exchange":"N"},{"startSn":"연지공원","startSc":"919","endSn":"박물관","endSc":"918","dist":"11","time":"97","stoppingTime":"20","exchange":"N"},{"startSn":"연지공원","startSc":"919","endSn":"장신대","endSc":"920","dist":"12","time":"109","stoppingTime":"20","exchange":"N"},{"startSn":"장신대","startSc":"920","endSn":"연지공원","endSc":"919","dist":"12","time":"113","stoppingTime":"20","exchange":"N"},{"startSn":"장신대","startSc":"920","endSn":"가야대","endSc":"921","dist":"9","time":"91","stoppingTime":"20","exchange":"N"},{"startSn":"가야대","startSc":"921","endSn":"장신대","endSc":"920","dist":"9","time":"83","stoppingTime":"20","exchange":"N"},{"startSn":"다대포해수욕장","startSc":"95","endSn":"다대포항","endSc":"96","dist":"14","time":"180","stoppingTime":"20","exchange":"N"},{"startSn":"다대포항","startSc":"96","endSn":"다대포해수욕장","endSc":"95","dist":"14","time":"180","stoppingTime":"20","exchange":"N"},{"startSn":"다대포항","startSc":"96","endSn":"낫개","endSc":"97","dist":"12","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"낫개","startSc":"97","endSn":"다대포항","endSc":"96","dist":"12","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"낫개","startSc":"97","endSn":"신장림","endSc":"98","dist":"11","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"신장림","startSc":"98","endSn":"낫개","endSc":"97","dist":"11","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"신장림","startSc":"98","endSn":"장림","endSc":"99","dist":"8","time":"120","stoppingTime":"20","exchange":"N"},{"startSn":"장림","startSc":"99","endSn":"동매","endSc":"100","dist":"12","time":"180","stoppingTime":"20","exchange":"N"},{"startSn":"장림","startSc":"99","endSn":"신장림","endSc":"98","dist":"8","time":"120","stoppingTime":"20","exchange":"N"}]},"numOfRows":1000,"pageNo":1,"totalCount":328}}
+\ No newline at end of file
+diff --git a/backend/tests/test_batch_collect.py b/backend/tests/test_batch_collect.py
+index 3f00695..5bef3e2 100644
+--- a/backend/tests/test_batch_collect.py
++++ b/backend/tests/test_batch_collect.py
+@@ -88,3 +88,34 @@ def test_http_error_message_has_no_url() -> None:
+     with pytest.raises(CollectError) as e:
+         asyncio.run(get_json(client(handler), "https://x/api?serviceKey=SECRET", {}, waits=()))
+     assert str(e.value) == "HTTP 401"
++
++
++def test_station_legs_use_data09_path_and_json() -> None:
++    seen: dict = {}
++
++    def handler(req: httpx.Request) -> httpx.Response:
++        seen["path"], seen["act"] = req.url.path, req.url.params["act"]
++        return httpx.Response(200, json=page([{"startSc": "100", "endSc": "101"}], 1))
++
++    rows = asyncio.run(collect.fetch_station_legs(client(handler), "KEY"))
++    assert seen == {"path": "/B551542/distance/getDistance", "act": "json"} and len(rows) == 1
++
++
++def test_unregistered_key_403_body_gives_code_without_key() -> None:
++    """활용신청을 안 한 키는 403 본문으로 코드 30이 온다(DATA-09에서 실제로 받은 모양)."""
++    err = {
++        "OpenAPI_ServiceResponse": {
++            "cmmMsgHeader": {
++                "errMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
++                "returnAuthMsg": "등록되지 않은 서비스키",
++                "returnReasonCode": "30",
++            }
++        }
++    }
++
++    def handler(req: httpx.Request) -> httpx.Response:
++        return httpx.Response(403, json=err)
++
++    with pytest.raises(CollectError) as e:
++        asyncio.run(get_json(client(handler), "https://x.test/a?serviceKey=SECRET", {}, waits=[]))
++    assert "API 오류 30" in str(e.value) and "SECRET" not in str(e.value)
+diff --git a/backend/tests/test_batch_job_db.py b/backend/tests/test_batch_job_db.py
+index 9fa3385..1f30bfb 100644
+--- a/backend/tests/test_batch_job_db.py
++++ b/backend/tests/test_batch_job_db.py
+@@ -29,6 +29,10 @@ ROWS = {
+         {"scode": "110", "sname": "남포", "saddr": "부산 중구 구덕로 지하 12"},
+         {"scode": "X1", "sname": "코드 없음"},
+     ],
++    "getDistance": [  # DATA-09. 111은 역 목록에 없어 station_time에는 들어가지 않는다
++        {"startSc": "110", "endSc": "111", "time": "90", "stoppingTime": "20", "exchange": "N"},
++        {"startSc": "111", "endSc": "110", "time": "90", "stoppingTime": "20", "exchange": "N"},
++    ],
+ }  # fmt: skip
+ 
+ 
+@@ -67,7 +71,7 @@ def test_run_publishes_and_second_run_reuses_address_coords(monkeypatch) -> None
+         conn = await asyncpg.connect(DSN)
+         try:
+             await conn.execute(
+-                "TRUNCATE review_item, shooting, work, location, station, sync_run"
++                "TRUNCATE review_item, shooting, work, location, station_time, station, sync_run"
+                 " RESTART IDENTITY CASCADE"
+             )
+             juso = Juso()
+@@ -77,7 +81,7 @@ def test_run_publishes_and_second_run_reuses_address_coords(monkeypatch) -> None
+                 assert await conn.fetchval("SELECT status FROM sync_run WHERE id=$1", run_id) == (
+                     "succeeded"
+                 )
+-                assert counts.fetched == {"DATA-01": 2, "DATA-02": 1, "DATA-08": 1}
++                assert counts.fetched == {"DATA-01": 2, "DATA-02": 1, "DATA-08": 1, "DATA-09": 2}
+                 assert counts.geo.by_source == {"address": 1, "keyword": 1, "none": 1}
+                 assert (counts.match.matched, counts.match.unmatched) == (1, 1)
+                 assert stats.match_rule["score"] == 1 and juso.calls == 2  # 역 1 + 촬영지 1
+@@ -99,3 +103,56 @@ def test_run_publishes_and_second_run_reuses_address_coords(monkeypatch) -> None
+             await conn.close()
+ 
+     asyncio.run(main())
++
++
++def test_station_time_published_and_kept_when_data09_fails(monkeypatch) -> None:
++    """역 두 곳이면 두 방향 2줄. 다음 실행에서 DATA-09가 실패하면 실패로 남기고 지난 값을 둔다."""
++    monkeypatch.setattr(guard, "MIN_WORKS", 1)
++    monkeypatch.setattr(guard, "MIN_LOCATIONS", 1)
++    rows = {**ROWS, "getStationInfo": [
++        {"scode": "110", "sname": "남포", "saddr": "부산 중구 구덕로 지하 12"},
++        {"scode": "111", "sname": "자갈치", "saddr": "부산 중구 구덕로 지하 1"},
++    ]}  # fmt: skip
++    data09_down = {"on": False}
++
++    def handler(req: httpx.Request) -> httpx.Response:
++        name = req.url.path.rsplit("/", 1)[1]
++        if name == "getDistance" and data09_down["on"]:
++            err = {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
++                "returnReasonCode": "30", "returnAuthMsg": "등록되지 않은 서비스키"}}}  # fmt: skip
++            return httpx.Response(403, json=err)
++        items = rows[name]
++        body = {"response": {"body": {"totalCount": len(items), "items": {"item": items}}}}
++        return httpx.Response(200, json=body)
++
++    async def main() -> None:
++        conn = await asyncpg.connect(DSN)
++        try:
++            await conn.execute(
++                "TRUNCATE review_item, shooting, work, location, station_time, station, sync_run"
++                " RESTART IDENTITY CASCADE"
++            )
++            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
++                c = job.Clients(http, "D", Juso(), None, Kmdb())
++                _, counts, stats = await job.run(conn, c)
++                assert counts.fetched["DATA-09"] == 2 and stats.station_pairs == 2
++                got = await conn.fetch(
++                    "SELECT from_id, to_id, minutes FROM station_time ORDER BY 1, 2"
++                )
++                assert [(r[0], r[1], float(r[2])) for r in got] == [
++                    ("110", "111", 1.8),  # (이동 90초 + 정차 20초) / 60
++                    ("111", "110", 1.8),
++                ]
++
++                data09_down["on"] = True
++                run_id, counts, stats = await job.run(conn, c)
++                row = await conn.fetchrow(
++                    "SELECT status, failures FROM sync_run WHERE id = $1", run_id
++                )
++                assert row["status"] == "succeeded" and "API 오류 30" in str(row["failures"])
++                assert counts.fetched["DATA-09"] == 0 and stats.station_pairs == 0
++                assert await conn.fetchval("SELECT count(*) FROM station_time") == 2
++        finally:
++            await conn.close()
++
++    asyncio.run(main())
+diff --git a/backend/tests/test_batch_station_times.py b/backend/tests/test_batch_station_times.py
+new file mode 100644
+index 0000000..a92d16f
+--- /dev/null
++++ b/backend/tests/test_batch_station_times.py
+@@ -0,0 +1,73 @@
++"""역간 소요시간 미리 계산 단위 테스트 (FR-313, BR-12, DATA-09).
++
++실제 응답 사본(tests/fixtures/real/data09_getDistance.json, 2026-11-18 수집,
++이용허락범위 제한 없음)과 손으로 만든 작은 구간을 쓴다. 실제 API는 부르지 않는다.
++"""
++
++import json
++from pathlib import Path
++
++from app.batch import station_times as st
++from app.batch.collect import find_items
++from app.batch.stations import Station
++
++REAL = Path(__file__).parent / "fixtures" / "real" / "data09_getDistance.json"
++
++
++def real_rows() -> list[dict]:
++    items, total = find_items(json.loads(REAL.read_text(encoding="utf-8")), "startSc")
++    assert total == len(items) == 328
++    return items
++
++
++def stn(code: str) -> Station:
++    return Station(code, code, "1호선", 35.1, 129.0)
++
++
++def leg(a: str, b: str, sec: str = "60", stop: str = "0") -> dict:
++    return {"startSc": a, "endSc": b, "time": sec, "stoppingTime": stop}
++
++
++def test_parse_real_response() -> None:
++    legs, skipped = st.parse(real_rows())
++    assert len(legs) == 328 and skipped == 0
++    by = {(x.from_id, x.to_id): x.seconds for x in legs}
++    assert by[("100", "101")] == 180 + 30  # 동매 → 신평: 이동 180초 + 정차 30초
++    assert by[("119", "219")] == 120  # 서면 1호선 → 2호선 환승 통로(exchange Y)
++
++
++def test_real_line1_end_to_end_close_to_timetable() -> None:
++    """다대포해수욕장(95) → 노포(134) 79.1분. 같은 기관 시간표(노포 05:08 → 다대포해수욕장 06:28,
++    80분)와 맞고, 이동시간만 더하면(62.4분) 짧게 나온다."""
++    legs, _ = st.parse(real_rows())
++    codes = sorted({x.from_id for x in legs} | {x.to_id for x in legs}, key=int)
++    m = {(a, b): v for a, b, v in st.all_pairs(legs, [stn(c) for c in codes])}
++    assert len(m) == len(codes) * (len(codes) - 1)  # 동해선·경전철 포함 모두 이어짐
++    assert m[("95", "134")] == 79.1
++    assert m[("119", "219")] == 2.0
++    assert m[("116", "816")] > 30  # 1호선 좌천과 동해선 좌천은 이름만 같은 다른 역
++
++
++def test_parse_skips_bad_rows() -> None:
++    rows = [leg("1", "2"), leg("", "2"), leg("3", "3"), {"startSc": "4", "endSc": "5", "time": "x"}]
++    legs, skipped = st.parse(rows)
++    assert [(x.from_id, x.to_id) for x in legs] == [("1", "2")] and skipped == 3
++
++
++def test_one_way_leg_mirrored_and_duplicate_keeps_shorter() -> None:
++    legs, _ = st.parse([leg("1", "2", "120"), leg("2", "3", "60"), leg("2", "3", "30")])
++    g = st.graph(legs)
++    assert g["2"]["1"] == 2.0  # 반대 방향 줄이 없으면 같은 시간
++    assert g["2"]["3"] == 0.5 and g["3"]["2"] == 0.5
++
++
++def test_given_reverse_direction_is_not_overwritten() -> None:
++    legs, _ = st.parse([leg("1", "2", "60"), leg("2", "1", "120")])
++    g = st.graph(legs)
++    assert (g["1"]["2"], g["2"]["1"]) == (1.0, 2.0)
++
++
++def test_all_pairs_only_known_stations_but_paths_through_unknown() -> None:
++    legs, _ = st.parse([leg("1", "X", "60"), leg("X", "2", "60"), leg("8", "9", "60")])
++    pairs = st.all_pairs(legs, [stn("1"), stn("2"), stn("8")])
++    assert pairs == [("1", "2", 2.0), ("2", "1", 2.0)]  # X는 목록 밖, 8은 다른 역과 안 이어짐
+diff --git a/backend/tests/test_station_times_db.py b/backend/tests/test_station_times_db.py
+new file mode 100644
+index 0000000..cf339d2
+--- /dev/null
++++ b/backend/tests/test_station_times_db.py
+@@ -0,0 +1,42 @@
++"""역간 소요시간 조회 DB 테스트 (COMP-12, FR-313). 코스 계산(TravelTimeEstimator)이 쓰는 표.
++
++스키마(db/init)를 적재한 '테스트 전용' DB가 있을 때만 돈다(station·station_time을 비운다).
++    CINELOCA_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_station_times_db.py
++"""
++
++import asyncio
++import os
++
++import asyncpg
++import pytest
++
++from app.data import station_times
++
++DSN = os.environ.get("CINELOCA_TEST_DATABASE_URL")
++pytestmark = pytest.mark.skipif(not DSN, reason="CINELOCA_TEST_DATABASE_URL 없음")
++
++
++def test_load_and_between() -> None:
++    async def main() -> None:
++        conn = await asyncpg.connect(DSN)
++        try:
++            await conn.execute("TRUNCATE station_time, station RESTART IDENTITY CASCADE")
++            await conn.executemany(
++                "INSERT INTO station (id, name, line, lat, lon)"
++                " VALUES ($1, $2, '1호선', 35.1, 129)",
++                [("110", "남포"), ("111", "자갈치")],
++            )
++            await conn.execute(
++                "INSERT INTO station_time VALUES ('110', '111', 1.8), ('111', '110', 2.1)"
++            )
++            t = await station_times.load(conn)
++            assert len(t) == 2
++            assert t.between("110", "111") == 1.8 and t.between("111", "110") == 2.1
++            assert t.between("110", "110") == 0.0
++            assert t.between("110", "999") is None and t.between(None, "110") is None
++            assert await station_times.between(conn, "111", "110") == 2.1
++            assert await station_times.between(conn, "110", "999") is None
++        finally:
++            await conn.close()
++
++    asyncio.run(main())
+diff --git a/db/init/05_station_time.sql b/db/init/05_station_time.sql
+new file mode 100644
+index 0000000..e15c264
+--- /dev/null
++++ b/db/init/05_station_time.sql
+@@ -0,0 +1,17 @@
++-- 역간 소요시간 스테이징과 출처 (FR-313, BR-12, DATA-09)
++--
++-- 배치는 DATA-09(이웃 역 구간)로 모든 역 쌍의 최소 소요시간(분)을 계산해 stg.station_time에 쌓고,
++-- 반영 때 station_time을 통째로 바꾼다(이번에 받지 못하면 지난 값 유지).
++-- 이미 만든 DB에는 이 파일을 한 번 실행하면 된다(docker compose exec -T db psql … < 이 파일).
++
++CREATE TABLE IF NOT EXISTS stg.station_time (
++    from_id VARCHAR(10) NOT NULL,
++    to_id   VARCHAR(10) NOT NULL,
++    minutes NUMERIC(6, 2) NOT NULL,
++    PRIMARY KEY (from_id, to_id)
++);
++
++-- 이용조건은 2026-11-18 공공데이터포털 페이지 기준
++INSERT INTO source (id, org, name, url, license, policy) VALUES
++ ('DATA-09', '부산교통공사', '역간 거리 및 소요시간 정보', 'https://www.data.go.kr/data/15158989/openapi.do', '공공데이터 이용허락범위 제한 없음', 'STORE')
++ON CONFLICT (id) DO NOTHING;
+-- 
+2.43.0
+

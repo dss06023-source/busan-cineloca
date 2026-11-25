@@ -1,0 +1,1 @@
+feat: F1 관람등급 API 추가 — KMDb 저장값 (API-003)

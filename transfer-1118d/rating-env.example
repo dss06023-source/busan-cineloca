@@ -1,0 +1,39 @@
+# 이 파일을 복사해 .env를 만들고 값을 채우세요. .env는 커밋하지 않습니다.
+# 변수 이름은 초안이며 Phase 2~3에서 확정합니다.
+
+# ── 데이터베이스 ──
+POSTGRES_DB=cineloca
+POSTGRES_USER=cineloca
+POSTGRES_PASSWORD=
+DATABASE_URL=
+
+# ── AI (SDD 2.4: 팀원 PC는 gemini, 팀 서버는 ollama) ──
+AI_PROVIDER=gemini           # ollama: 로컬 주 + Gemini 보조 / gemini: Gemini만 / none: AI 끔(강등 확인용)
+GEMINI_API_KEY=              # Google AI Studio 키 (무료 등급, 일일 한도 작음)
+GEMINI_MODEL=                # 비우면 gemini-3.5-flash
+GEMINI_DAILY_LIMIT=          # 비우면 20. AI Studio의 무료 등급 일일 요청 한도(70% 경고, 100%면 건너뜀)
+OLLAMA_BASE_URL=             # 예: http://ollama:11434 (팀 서버). 비우면 Ollama·임베딩 안 씀
+OLLAMA_MODEL=                # 비우면 qwen3:8b
+OLLAMA_EMBED_MODEL=          # 비우면 bge-m3 (1024차원)
+
+# ── 외부 데이터 API (배치) ──
+DATA_GO_KR_SERVICE_KEY=      # 공공데이터포털 (부산영상위원회, 교통공사, TourAPI)
+KMDB_SERVICE_KEY=            # 한국영상자료원 KMDb
+JUSO_SEARCH_API_KEY=         # 행정안전부 주소 검색 API
+JUSO_COORD_API_KEY=          # 행정안전부 좌표 제공 API
+KAKAO_REST_API_KEY=          # 카카오 로컬 REST 키(배치 전용). GEOCODE_KAKAO_KEYWORD=true일 때만 씀. 응답은 저장하지 않음
+GEOCODE_KAKAO_KEYWORD=false  # true면 주소 없는·동까지만 있는 촬영지를 카카오 키워드 검색으로 찾음(#25). 약관 확인 전까지 false(ADR-006)
+KOBIS_API_KEY=               # 영화진흥위원회 KOBIS (관람등급 실시간 조회, 저장 금지). 비우면 등급 표시 안 함
+
+# ── 프론트엔드 ──
+VITE_KAKAO_JS_KEY=           # 카카오 JavaScript 키 (등록 도메인에서만 동작)
+
+# ── 로그 (NFR-005) ──
+LOG_LEVEL=INFO               # 앱 로그 수준. 콘솔이 시끄러우면 WARNING
+LOG_DIR=                     # 요청 로그 폴더(7일 보관). 비우면 파일로 남기지 않음. Docker는 /app/logs 고정
+
+# ── 보안 ──
+ADMIN_PASSWORD_HASH=         # 관리자 비밀번호 해시 (FR-615)
+STAMP_SIGNING_KEY=           # 스탬프·배지 HMAC 서명 키 (ADR-009)
+#   32자 이상. 만들기: python -c "import secrets; print(secrets.token_urlsafe(48))"
+#   바꾸면 이미 발급한 스탬프·배지가 모두 무효가 됩니다
